@@ -1,50 +1,50 @@
 ---
 # Display name
-title: 吳健雄
+title: Changcheng Fu
 
 # Name pronunciation (optional)
-name_pronunciation: Chien Shiung Wu
+name_pronunciation: 
 
 # Full name (for SEO)
-first_name: Shiung Wu
-last_name: Chien
+first_name: Changcheng
+last_name: Fu
 
 # Status emoji
 status:
-  icon: ☕️
+  icon: ☕️☕️
 
 # Is this the primary user of the site?
 superuser: true
 
 # Role/position/tagline
-role: Professor of Artificial Intelligence
+role: Ph.D. Student at University of Southern California
 
 # Organizations/Affiliations to show in About widget
 organizations:
-  - name: Stanford University
-    url: https://www.stanford.edu/
+  - name: University of Southern California
+    url: https://www.usc.edu/
 
 # Short bio (displayed in user profile at end of posts)
-bio: My research interests include distributed robotics, mobile computing and programmable matter.
+bio: Hi, I'm Changcheng, a first-year Ph.D. advised by Prof. Ram Nevatia at the University of Southern California. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
 
 # Interests to show in About widget
 interests:
-  - Artificial Intelligence
-  - Computational Linguistics
-  - Information Retrieval
+  - Computer Vision
+  - Large Language Models(LLMs)
+  - Multi-modal Learning
 
 # Education to show in About widget
 education:
   courses:
     - course: PhD in Artificial Intelligence
-      institution: Stanford University
-      year: 2012
-    - course: MEng in Artificial Intelligence
-      institution: Massachusetts Institute of Technology
-      year: 2009
-    - course: BSc in Artificial Intelligence
-      institution: Massachusetts Institute of Technology
-      year: 2008
+      institution: University of Southern California
+      year: 
+    - course: MS in Computer Science
+      institution: Brown University
+      year: 2021-2023
+    - course: BS in Computer Science
+      institution: University of Illinois Urbana-Champaign
+      year: 2017-2021
 
 # Skills
 # For available icons, see: https://wowchemy.com/docs/getting-started/page-builder/#icons

@@ -96,7 +96,7 @@ social:
     link: '/#contact'
   - icon: twitter
     icon_pack: fab
-    link: https://twitter.com/GeorgeCushen
+    link: https://twitter.com/ChangchengF
     label: Follow me on Twitter
     display:
       header: true
@@ -112,13 +112,13 @@ social:
   # Link to a PDF of your resume/CV.
   # To use: copy your resume to `static/uploads/resume.pdf`, enable `ai` icons in `params.yaml`,
   # and uncomment the lines below.
-  - icon: cv
-    icon_pack: ai
-    link: uploads/resume.pdf
+  # - icon: cv
+  #   icon_pack: ai
+  #   link: uploads/resume.pdf
 
 # Highlight the author in author lists? (true/false)
 highlight_name: true
 ---
 
-Hi, I'm Changcheng, a first-year Ph.D. advised by <a href="https://sites.usc.edu/iris-cvlab/professor-ram-nevatia/">Prof. Ram Nevatia</a> at the University of Southern California. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
+Hi, I'm Changcheng, a first-year Ph.D. advised by <a href="https://sites.usc.edu/iris-cvlab/professor-ram-nevatia/">Prof. Ram Nevatia</a> at the University of Southern California. Before that, I obtained my master degree under the guidance of <a href="https://chensun.me/index.html">Prof. Chen Sun</a> at Brown University in 2023. I completed my bachelor degree in Computer Science at the University of Illinois Urbana-Champaign in 2021. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
 {style="text-align: justify;"}

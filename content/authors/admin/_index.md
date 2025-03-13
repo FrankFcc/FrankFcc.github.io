@@ -25,7 +25,7 @@ organizations:
     url: https://www.usc.edu/
 
 # Short bio (displayed in user profile at end of posts)
-bio: Hi, I'm Changcheng, a first-year Ph.D. advised by Prof. Ram Nevatia at the University of Southern California. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
+bio: Hi, I'm Changcheng, a second-year Ph.D. advised by Prof. Ram Nevatia at the University of Southern California. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
 
 # Interests to show in About widget
 interests:

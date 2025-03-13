@@ -46,10 +46,13 @@ jobs:
         run: |
           echo "Hugo Cache Dir: $(hugo config | grep cachedir)"
           hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+          ls -la ./public # Add this line to list the contents of the ./public directory
+      
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
+          if-no-files-found: error # Add this line to throw an error if no files are found
 
   deploy:
     if: github.repository_owner != 'wowchemy'

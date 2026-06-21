@@ -257,6 +257,15 @@ body {
   padding: clamp(1.1rem, 3vw, 2rem);
 }
 
+.article:has(.anime-dashboard) > .article-container {
+  max-width: none;
+  width: calc(100vw - 2rem);
+}
+
+.article:has(.anime-dashboard) .article-style {
+  overflow: visible;
+}
+
 .wide-page-panel {
   margin-left: 50%;
   max-width: 2040px;

@@ -254,6 +254,45 @@ body {
   padding: 0.32rem;
 }
 
+.anime-setup {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  margin: 0 0 1.4rem;
+  max-width: 28rem;
+  padding: 1rem;
+}
+
+.anime-setup label {
+  color: var(--cf-muted);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.anime-setup-row {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.anime-setup input {
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+}
+
+.anime-setup button {
+  background: var(--cf-accent);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  padding: 0.55rem 0.9rem;
+}
+
 .anime-tab {
   background: transparent;
   border: 0;

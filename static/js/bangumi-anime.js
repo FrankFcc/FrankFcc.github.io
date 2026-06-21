@@ -4,8 +4,17 @@
 
   var grid = root.querySelector('[data-anime-grid]');
   var status = root.querySelector('[data-anime-status]');
+  var setup = root.querySelector('[data-anime-setup]');
+  var usernameInput = root.querySelector('[data-anime-username-input]');
   var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-anime-tab]'));
-  var username = root.dataset.bangumiUsername;
+  var configuredUsername = root.dataset.bangumiUsername || '';
+  var previewUsername = '';
+  try {
+    previewUsername = new URLSearchParams(window.location.search).get('user') || '';
+  } catch (error) {
+    previewUsername = '';
+  }
+  var username = (previewUsername || configuredUsername).trim();
   var subjectType = root.dataset.subjectType || '2';
   var types = {
     current: root.dataset.currentType || '3',
@@ -18,9 +27,37 @@
   var cache = {};
   var activeTab = 'current';
 
+  if (setup && !configuredUsername) {
+    setup.hidden = false;
+  }
+
+  if (usernameInput) {
+    usernameInput.value = username;
+  }
+
   function setStatus(message) {
     status.textContent = message;
     status.hidden = !message;
+  }
+
+  function setUsername(value) {
+    username = String(value || '').trim();
+    cache = {};
+    if (usernameInput) {
+      usernameInput.value = username;
+    }
+
+    if (!configuredUsername && username) {
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('user', username);
+        window.history.replaceState({}, '', url);
+      } catch (error) {
+        // Ignore history failures; fetching still works.
+      }
+    }
+
+    fetchTab(activeTab);
   }
 
   function escapeHtml(value) {
@@ -137,6 +174,13 @@
       fetchTab(button.dataset.animeTab);
     });
   });
+
+  if (setup) {
+    setup.addEventListener('submit', function (event) {
+      event.preventDefault();
+      setUsername(usernameInput && usernameInput.value);
+    });
+  }
 
   fetchTab(activeTab);
 })();

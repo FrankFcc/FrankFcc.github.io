@@ -16,6 +16,13 @@
     <button class="anime-tab is-active" type="button" data-anime-tab="current" role="tab" aria-selected="true">Watching</button>
     <button class="anime-tab" type="button" data-anime-tab="completed" role="tab" aria-selected="false">Completed</button>
   </div>
+  <form class="anime-setup" data-anime-setup hidden>
+    <label for="bangumi-username">Bangumi username</label>
+    <div class="anime-setup-row">
+      <input id="bangumi-username" type="text" data-anime-username-input autocomplete="off" placeholder="Bangumi username">
+      <button type="submit">Load</button>
+    </div>
+  </form>
   <div class="anime-status" data-anime-status>Loading Bangumi collection...</div>
   <div class="anime-grid" data-anime-grid></div>
 </section>

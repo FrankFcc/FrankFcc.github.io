@@ -16,6 +16,19 @@
     <button class="anime-tab is-active" type="button" data-anime-tab="current" role="tab" aria-selected="true">Watching</button>
     <button class="anime-tab" type="button" data-anime-tab="completed" role="tab" aria-selected="false">Completed</button>
   </div>
+  <div class="anime-controls" data-anime-controls hidden>
+    <label class="anime-search">
+      <span>Search</span>
+      <input type="search" data-anime-search placeholder="Title, note, studio, tag" autocomplete="off">
+    </label>
+    <label class="anime-filter">
+      <span>Tag</span>
+      <select data-anime-tag-filter>
+        <option value="">All tags</option>
+      </select>
+    </label>
+    <button class="anime-clear" type="button" data-anime-clear>Clear</button>
+  </div>
   <form class="anime-setup" data-anime-setup hidden>
     <label for="bangumi-username">Bangumi username</label>
     <div class="anime-setup-row">
@@ -24,5 +37,8 @@
     </div>
   </form>
   <div class="anime-status" data-anime-status>Loading Bangumi collection...</div>
+  <div class="anime-meta" data-anime-meta></div>
   <div class="anime-grid" data-anime-grid></div>
+  <div class="anime-sentinel" data-anime-sentinel aria-hidden="true"></div>
+  <button class="anime-load-more" type="button" data-anime-load-more hidden>Load more</button>
 </section>

@@ -2,6 +2,7 @@ name: Deploy Wowchemy website to GitHub Pages
 
 env:
   WC_HUGO_VERSION: '0.119.0'
+  HUGO_CACHEDIR: /tmp/hugo_cache_runner
 
 on:
   push:
@@ -27,32 +28,37 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v2
+        uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: ${{ env.WC_HUGO_VERSION }}
           extended: true
-      - uses: actions/cache@v3
+      - name: Setup Go
+        uses: actions/setup-go@v6
         with:
-          path: /tmp/hugo_cache_runner/
+          go-version: 'stable'
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.HUGO_CACHEDIR }}
           key: ${{ runner.os }}-hugomod-${{ hashFiles('**/go.mod') }}
           restore-keys: |
             ${{ runner.os }}-hugomod-
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v6
       - name: Build with Hugo
         env:
           HUGO_ENVIRONMENT: production
         run: |
           echo "Hugo Cache Dir: $(hugo config | grep cachedir)"
-          hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
-          ls -la ./public # Add this line to list the contents of the ./public directory
+          hugo --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+          test -f ./public/index.html
+          ls -la ./public
       
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./public
-          if-no-files-found: error # Add this line to throw an error if no files are found
 
   deploy:
     if: github.repository_owner != 'wowchemy'
@@ -64,4 +70,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v5

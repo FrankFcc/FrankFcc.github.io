@@ -1,0 +1,5 @@
+# whos.amung.us widget id for live visitor count, history, and map widgets.
+# Changing this id starts a new stats history.
+widget_id: 'frankfcc26'
+map_slot: 'frankmap'
+counter_slot: 'franklive'

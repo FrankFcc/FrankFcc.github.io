@@ -94,6 +94,15 @@ sections:
     design:
       columns: '1'
 
+  - block: markdown
+    id: visitors
+    content:
+      title: Visitors
+      text: |-
+        {{< visitor-map >}}
+    design:
+      columns: '1'
+
   - block: contact
     id: contact
     content:

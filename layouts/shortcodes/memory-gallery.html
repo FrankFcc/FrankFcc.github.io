@@ -7,18 +7,20 @@
   {{- end -}}
 {{- end -}}
 {{- if gt (len $images) 0 -}}
-  <div class="memory-grid">
+  <div class="wide-page-panel memory-panel">
+    <div class="memory-grid">
     {{- range $index, $image := $images -}}
-      {{- $thumb := $image.Fit "640x520 webp q80" -}}
+      {{- $thumb := $image.Fit "820x620 webp q82" -}}
       <figure class="memory-photo">
         <a href="{{ $image.RelPermalink }}">
           <img src="{{ $thumb.RelPermalink }}" width="{{ $thumb.Width }}" height="{{ $thumb.Height }}" alt="Memory photo {{ add $index 1 }}" loading="lazy">
         </a>
       </figure>
     {{- end -}}
+    </div>
   </div>
 {{- else -}}
-  <div class="memory-empty">
+  <div class="wide-page-panel memory-empty">
     <p>Photos coming soon.</p>
   </div>
 {{- end -}}

@@ -1,0 +1,19 @@
+{{- $cfg := site.Data.visitors -}}
+{{- $widgetId := $cfg.widget_id | default "frankfcc26" -}}
+{{- $mapSlot := $cfg.map_slot | default "frankmap" -}}
+{{- $counterSlot := $cfg.counter_slot | default "franklive" -}}
+{{- $statsURL := printf "https://whos.amung.us/stats/%s/" $widgetId -}}
+<div class="visitor-panel">
+  <div class="visitor-panel-copy">
+    <span>Live Traffic</span>
+    <strong>Visitor Map</strong>
+    <p>Live visits and locations start recording from this widget installation.</p>
+    <a href="{{ $statsURL }}" target="_blank" rel="noopener">Open visitor history</a>
+  </div>
+  <div class="visitor-panel-map" aria-label="Live visitor map">
+    <script id="_wau{{ $mapSlot }}">var _wau = _wau || []; _wau.push(["map", "{{ $widgetId }}", "{{ $mapSlot }}", "720", "360", "night", "cross-blue"]);</script><script async src="https://waust.at/m.js"></script>
+  </div>
+  <div class="visitor-panel-count" aria-label="Live visitor count">
+    <script id="_wau{{ $counterSlot }}">var _wau = _wau || []; _wau.push(["dynamic", "{{ $widgetId }}", "{{ $counterSlot }}", "256f9cffffff", "large"]);</script><script async src="https://waust.at/d.js"></script>
+  </div>
+</div>

@@ -91,6 +91,56 @@
     return tag && (tag.name || tag.title || tag.label || tag.value);
   }
 
+  function pickTags(item, subject) {
+    var seen = {};
+    return []
+      .concat(item.tags || [])
+      .concat((subject && subject.tags) || [])
+      .map(pickTagName)
+      .filter(Boolean)
+      .filter(function (tag) {
+        var key = String(tag).toLowerCase();
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      })
+      .slice(0, 5);
+  }
+
+  function formatScore(value) {
+    var score = Number(value || 0);
+    return score > 0 ? score.toFixed(1).replace(/\.0$/, '') : '-';
+  }
+
+  function formatRelease(dateValue) {
+    if (!dateValue) return 'TBA';
+    var parts = String(dateValue).split('-');
+    var year = parts[0];
+    var month = Number(parts[1] || 0);
+    if (!year || !month) return year || 'TBA';
+    try {
+      return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(new Date(Number(year), month - 1, 1));
+    } catch (error) {
+      return year + '-' + String(month).padStart(2, '0');
+    }
+  }
+
+  function formatEpisodeStatus(item, subject) {
+    var watched = Number(item.ep_status || 0);
+    var total = Number(subject && subject.eps || 0);
+    if (watched && total) return watched + '/' + total + ' eps';
+    if (watched) return watched + ' eps';
+    if (total) return total + ' eps';
+    return '';
+  }
+
+  function pickSummary(subject, item) {
+    var text = (subject && subject.short_summary) || item.comment || '';
+    text = String(text).replace(/\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) return 'No short description available yet.';
+    return text.length > 220 ? text.slice(0, 217).trim() + '...' : text;
+  }
+
   function render(items) {
     grid.innerHTML = '';
     if (!items.length) {
@@ -106,7 +156,10 @@
       var image = pickImage(subject);
       var subjectId = pickSubjectId(item);
       var subjectUrl = subjectId ? 'https://bgm.tv/subject/' + encodeURIComponent(subjectId) : 'https://bgm.tv/';
-      var tags = (item.tags || []).map(pickTagName).filter(Boolean).slice(0, 5);
+      var tags = pickTags(item, subject);
+      var release = formatRelease(subject.date);
+      var episodeStatus = formatEpisodeStatus(item, subject);
+      var summary = pickSummary(subject, item);
       var card = document.createElement('article');
       card.className = 'anime-card reveal-item is-visible';
       card.innerHTML = [
@@ -114,12 +167,17 @@
           image ? '<img src="' + escapeHtml(image) + '" alt="' + escapeHtml(title) + '" loading="lazy">' : '<span class="anime-cover-fallback">No cover</span>',
         '</a>',
         '<div class="anime-card-body">',
-          '<h2><a href="' + subjectUrl + '" target="_blank" rel="noopener">' + escapeHtml(title) + '</a></h2>',
-          '<div class="anime-meta">',
-            item.rate ? '<span>Score ' + escapeHtml(item.rate) + '</span>' : '',
-            item.ep_status ? '<span>EP ' + escapeHtml(item.ep_status) + '</span>' : '',
+          '<div class="anime-kicker">',
+            '<span>' + escapeHtml(release) + '</span>',
+            episodeStatus ? '<span>' + escapeHtml(episodeStatus) + '</span>' : '',
           '</div>',
-          item.comment ? '<p class="anime-comment">' + escapeHtml(item.comment) + '</p>' : '',
+          '<h2><a href="' + subjectUrl + '" target="_blank" rel="noopener">' + escapeHtml(title) + '</a></h2>',
+          '<div class="anime-rating">',
+            '<span><strong>Overall</strong> ' + escapeHtml(formatScore(subject.score)) + '</span>',
+            '<span><strong>My rating</strong> ' + escapeHtml(formatScore(item.rate)) + '</span>',
+          '</div>',
+          '<p class="anime-summary">' + escapeHtml(summary) + '</p>',
+          item.comment ? '<p class="anime-comment"><strong>Note</strong> ' + escapeHtml(item.comment) + '</p>' : '',
           tags.length ? '<div class="anime-tags">' + tags.map(function (tag) { return '<span>' + escapeHtml(tag) + '</span>'; }).join('') + '</div>' : '',
         '</div>'
       ].join('');

@@ -12,35 +12,19 @@ sections:
     design:
       columns: '2'
 
-  - block: markdown
-    id: overview
+  - block: collection
+    id: publications
     content:
-      title: Explore
-      text: |-
-        <div class="cf-quick-grid">
-          <a class="cf-quick-card" href="/publication/">
-            <span>Research</span>
-            <strong>Publications</strong>
-            <p>Papers, preprints, and selected academic work.</p>
-          </a>
-          <a class="cf-quick-card" href="/project/">
-            <span>Builds</span>
-            <strong>Projects</strong>
-            <p>Research systems, prototypes, and engineering notes.</p>
-          </a>
-          <a class="cf-quick-card" href="/post/">
-            <span>Writing</span>
-            <strong>Posts</strong>
-            <p>Longer notes on research, tools, and experiments.</p>
-          </a>
-          <a class="cf-quick-card" href="/uploads/resume.pdf">
-            <span>CV</span>
-            <strong>Resume</strong>
-            <p>A compact academic and professional snapshot.</p>
-          </a>
-        </div>
+      title: Selected Publications
+      count: 2
+      filters:
+        folders:
+          - publication
+        featured_only: true
+      order: desc
     design:
       columns: '1'
+      view: citation
 
   - block: collection
     id: posts
@@ -70,25 +54,27 @@ sections:
       columns: '1'
       view: card
 
-  - block: collection
-    id: publications
-    content:
-      title: Publications
-      count: 5
-      filters:
-        folders:
-          - publication
-      order: desc
-    design:
-      columns: '1'
-      view: citation
-
   - block: markdown
-    id: personal
+    id: overview
     content:
-      title: Personal Notes
+      title: Explore
       text: |-
         <div class="cf-quick-grid">
+          <a class="cf-quick-card" href="/publication/">
+            <span>Research</span>
+            <strong>Publication</strong>
+            <p>Selected papers and the full publication list.</p>
+          </a>
+          <a class="cf-quick-card" href="/post/">
+            <span>Writing</span>
+            <strong>Posts</strong>
+            <p>Longer notes on research, tools, and experiments.</p>
+          </a>
+          <a class="cf-quick-card" href="/project/">
+            <span>Builds</span>
+            <strong>Projects</strong>
+            <p>Research systems, prototypes, and engineering notes.</p>
+          </a>
           <a class="cf-quick-card" href="/memory/">
             <span>Photos</span>
             <strong>Memory</strong>
@@ -98,6 +84,11 @@ sections:
             <span>Bangumi</span>
             <strong>myAnime</strong>
             <p>Current and completed anime from my Bangumi collection.</p>
+          </a>
+          <a class="cf-quick-card" href="/uploads/resume.pdf">
+            <span>CV</span>
+            <strong>CV</strong>
+            <p>A compact academic and professional snapshot.</p>
           </a>
         </div>
     design:

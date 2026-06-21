@@ -11,13 +11,13 @@ last_name: Fu
 
 # Status emoji
 status:
-  icon: ☕️☕️
+  icon: ""
 
 # Is this the primary user of the site?
 superuser: true
 
 # Role/position/tagline
-role: Ph.D. Student at University of Southern California
+role: Ph.D. Student in Computer Science at University of Southern California
 
 # Organizations/Affiliations to show in About widget
 organizations:
@@ -25,13 +25,15 @@ organizations:
     url: https://www.usc.edu/
 
 # Short bio (displayed in user profile at end of posts)
-bio: Hi, I'm Changcheng, a second-year Ph.D. advised by Prof. Ram Nevatia at the University of Southern California. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
+bio: Hi, I'm Changcheng, a Ph.D. student in Computer Science at the University of Southern California, advised by Prof. Ram Nevatia. My research focuses on computer vision, deep learning, machine learning, and multimodal large language models for visual understanding and long-term action anticipation.
 
 # Interests to show in About widget
 interests:
   - Computer Vision
-  - Large Language Models(LLMs)
-  - Multi-modal Learning
+  - Deep Learning
+  - Machine Learning
+  - Large Language Models
+  - Multimodal Learning
 
 # Education to show in About widget
 education:
@@ -98,8 +100,6 @@ social:
     icon_pack: fab
     link: https://twitter.com/ChangchengF
     label: Follow me on Twitter
-    display:
-      header: true
   - icon: google-scholar # Alternatively, use `google-scholar` icon from `ai` icon pack
     icon_pack: ai
     link: https://scholar.google.com/citations?user=TduSHQwAAAAJ
@@ -117,5 +117,5 @@ social:
 highlight_name: true
 ---
 
-Hi, I'm Changcheng, a first-year Ph.D. advised by <a href="https://sites.usc.edu/iris-cvlab/professor-ram-nevatia/">Prof. Ram Nevatia</a> at the University of Southern California. Before that, I obtained my master degree under the guidance of <a href="https://chensun.me/index.html">Prof. Chen Sun</a> at Brown University in 2023. I completed my bachelor degree in Computer Science at the University of Illinois Urbana-Champaign in 2021. I'm broadly interested in Computer Vision where my current research mainly focuses on leveraging large language models(LLMs) in solving different downstream vision tasks. My long-term goal is to learn how multimodalities input and LLMs can help in building more robust and generalizable computational models, which can achieve reliable performance inferencing on out-of-distribution data and can be easily transferable on downstream tasks.
+Hi, I'm Changcheng, a Ph.D. student in Computer Science advised by <a href="https://sites.usc.edu/iris-cvlab/professor-ram-nevatia/">Prof. Ram Nevatia</a> at the University of Southern California. Before USC, I completed my M.S. in Computer Science at Brown University in 2023 under the guidance of <a href="https://chensun.me/index.html">Prof. Chen Sun</a>, and my B.S. in Computer Science at the University of Illinois Urbana-Champaign in 2021. My research focuses on computer vision, deep learning, machine learning, and multimodal large language models for visual understanding, long-term action anticipation, robust out-of-distribution inference, and transferable downstream vision systems.
 {style="text-align: justify;"}

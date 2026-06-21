@@ -163,6 +163,58 @@ body {
   max-width: 1100px;
 }
 
+@media (min-width: 1400px) {
+  .container,
+  .home-section > .container,
+  .wg-about-biography .container {
+    max-width: 2040px;
+    width: calc(100vw - 6rem);
+  }
+
+  .universal-wrapper {
+    max-width: 1760px;
+    width: calc(100vw - 6rem);
+  }
+
+  .wg-about-biography .row {
+    align-items: center;
+  }
+
+  .wg-about-biography .col-lg-4 {
+    flex: 0 0 34%;
+    max-width: 34%;
+    padding-right: 2.5rem;
+  }
+
+  .wg-about-biography .col-lg-8 {
+    flex: 0 0 66%;
+    max-width: 66%;
+  }
+
+  .wg-about-biography #profile {
+    max-width: none;
+    width: 100%;
+  }
+
+  .portrait-title h2 {
+    font-size: clamp(2.5rem, 2.1vw, 3.55rem);
+    white-space: nowrap;
+  }
+
+  .portrait-title h3 {
+    font-size: 1.08rem;
+  }
+
+  .wg-about-biography .article-style {
+    font-size: 1.05rem;
+    max-width: 78rem;
+  }
+
+  .cf-quick-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
 .universal-wrapper.pt-3 {
   padding-top: 4.5rem !important;
 }

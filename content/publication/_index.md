@@ -1,5 +1,6 @@
 ---
 title: Publications
+summary: Research papers, preprints, and selected academic work.
 cms_exclude: false
 
 # View.

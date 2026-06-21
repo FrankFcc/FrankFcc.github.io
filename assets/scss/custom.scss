@@ -1,0 +1,426 @@
+:root {
+  --cf-ink: #1d2433;
+  --cf-muted: #5b6475;
+  --cf-line: rgba(29, 36, 51, 0.12);
+  --cf-surface: #ffffff;
+  --cf-surface-soft: #f5f7fb;
+  --cf-accent: #256f9c;
+  --cf-shadow: 0 18px 45px rgba(22, 34, 51, 0.12);
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(37, 111, 156, 0.12), transparent 34rem),
+    linear-gradient(180deg, #f7f9fc 0%, #ffffff 38%, #f4f7fb 100%);
+  color: var(--cf-ink);
+  letter-spacing: 0;
+}
+
+.navbar {
+  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.86) !important;
+  border-bottom: 1px solid var(--cf-line);
+  box-shadow: 0 10px 28px rgba(20, 30, 45, 0.08);
+}
+
+.navbar-brand {
+  font-weight: 700;
+}
+
+.navbar-nav .nav-link {
+  border-radius: 999px;
+  font-weight: 600;
+  margin: 0 0.06rem;
+  padding: 0.36rem 0.74rem !important;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active {
+  background: rgba(37, 111, 156, 0.1);
+  color: var(--cf-accent) !important;
+  transform: translateY(-1px);
+}
+
+.home-section {
+  padding: 5.2rem 0;
+}
+
+.wg-about-biography {
+  align-items: center;
+  display: flex;
+  min-height: calc(100vh - 5rem);
+}
+
+.wg-about-biography .container {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: var(--cf-shadow);
+  padding: clamp(1.4rem, 4vw, 3rem);
+}
+
+#profile {
+  text-align: left;
+}
+
+#profile .avatar {
+  border: 6px solid #fff;
+  box-shadow: 0 16px 40px rgba(31, 46, 71, 0.2);
+}
+
+.portrait-title h2 {
+  font-size: clamp(1.75rem, 4vw, 2.7rem);
+  margin-top: 1.2rem;
+}
+
+.portrait-title h3 {
+  color: var(--cf-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.network-icon {
+  margin-top: 1.2rem;
+}
+
+.network-icon li a {
+  align-items: center;
+  background: var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 2.35rem;
+  justify-content: center;
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  width: 2.35rem;
+}
+
+.network-icon li a:hover {
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(28, 46, 73, 0.14);
+  transform: translateY(-2px);
+}
+
+.article-style p,
+.summary-link .article-style {
+  color: var(--cf-muted);
+  line-height: 1.75;
+}
+
+.section-subheading {
+  color: var(--cf-ink);
+  font-weight: 700;
+}
+
+.cf-quick-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cf-quick-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  color: var(--cf-ink);
+  display: block;
+  min-height: 10rem;
+  padding: 1.15rem;
+  text-decoration: none;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.cf-quick-card:hover {
+  border-color: rgba(37, 111, 156, 0.35);
+  box-shadow: var(--cf-shadow);
+  text-decoration: none;
+  transform: translateY(-4px);
+}
+
+.cf-quick-card span {
+  color: var(--cf-accent);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.cf-quick-card strong {
+  display: block;
+  font-size: 1.15rem;
+  margin-bottom: 0.45rem;
+}
+
+.cf-quick-card p {
+  color: var(--cf-muted);
+  font-size: 0.94rem;
+  margin: 0;
+}
+
+.universal-wrapper {
+  max-width: 1100px;
+}
+
+.universal-wrapper.pt-3 {
+  padding-top: 4.5rem !important;
+}
+
+.universal-wrapper.pt-3 h1 {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.stream-item {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(22, 34, 51, 0.08);
+  margin-bottom: 1rem;
+  padding: 1.05rem;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.stream-item:hover {
+  border-color: rgba(37, 111, 156, 0.28);
+  box-shadow: var(--cf-shadow);
+  transform: translateY(-3px);
+}
+
+.stream-item img {
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.btn-page-header,
+.btn-outline-primary {
+  border-radius: 999px;
+}
+
+.article-container {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: 0 16px 38px rgba(22, 34, 51, 0.08);
+  padding: clamp(1.1rem, 3vw, 2rem);
+}
+
+.anime-dashboard {
+  margin-top: 1.5rem;
+}
+
+.memory-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  margin-top: 1.5rem;
+}
+
+.memory-photo {
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(22, 34, 51, 0.1);
+  margin: 0;
+  overflow: hidden;
+}
+
+.memory-photo img {
+  height: 100%;
+  object-fit: cover;
+  transition: transform 260ms ease;
+  width: 100%;
+}
+
+.memory-photo:hover img {
+  transform: scale(1.035);
+}
+
+.memory-empty {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  color: var(--cf-muted);
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+}
+
+.anime-toolbar {
+  background: var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-bottom: 1.4rem;
+  padding: 0.32rem;
+}
+
+.anime-tab {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--cf-muted);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.5rem 0.9rem;
+}
+
+.anime-tab.is-active {
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(22, 34, 51, 0.12);
+  color: var(--cf-accent);
+}
+
+.anime-status {
+  color: var(--cf-muted);
+  margin: 1rem 0;
+}
+
+.anime-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.anime-card {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(22, 34, 51, 0.08);
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  min-height: 9rem;
+  overflow: hidden;
+}
+
+.anime-cover {
+  background: var(--cf-surface-soft);
+  min-height: 100%;
+}
+
+.anime-cover img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.anime-cover-fallback {
+  align-items: center;
+  color: var(--cf-muted);
+  display: flex;
+  font-size: 0.8rem;
+  height: 100%;
+  justify-content: center;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.anime-card-body {
+  padding: 0.85rem;
+}
+
+.anime-card h2 {
+  font-size: 1rem;
+  line-height: 1.35;
+  margin: 0 0 0.4rem;
+}
+
+.anime-meta {
+  color: var(--cf-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  gap: 0.45rem;
+}
+
+.anime-comment {
+  color: var(--cf-muted);
+  font-size: 0.88rem;
+  margin: 0.55rem 0 0;
+}
+
+.anime-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.anime-tags span {
+  background: rgba(37, 111, 156, 0.1);
+  border-radius: 999px;
+  color: var(--cf-accent);
+  font-size: 0.74rem;
+  padding: 0.15rem 0.5rem;
+}
+
+.reveal-item {
+  opacity: 1;
+  transform: translateY(14px);
+  transition: transform 420ms ease;
+}
+
+.reveal-item.is-visible,
+.home-section.reveal-item.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+body.dark,
+body.dark .navbar,
+body.dark .wg-about-biography .container,
+body.dark .stream-item,
+body.dark .article-container,
+body.dark .cf-quick-card,
+body.dark .anime-card {
+  --cf-ink: #eef3f8;
+  --cf-muted: #b7c2d0;
+  --cf-line: rgba(238, 243, 248, 0.12);
+  --cf-surface: #101722;
+  --cf-surface-soft: #151f2c;
+  background-color: rgba(16, 23, 34, 0.9);
+}
+
+body.dark {
+  background:
+    radial-gradient(circle at top left, rgba(91, 149, 194, 0.17), transparent 34rem),
+    linear-gradient(180deg, #0e141e 0%, #111926 100%);
+}
+
+@media (max-width: 991.98px) {
+  .cf-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #profile {
+    text-align: center;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .cf-quick-grid,
+  .anime-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-section {
+    padding: 3.4rem 0;
+  }
+
+  .wg-about-biography .container {
+    border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .reveal-item {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,21 @@
+{{- $cfg := site.Data.anime -}}
+{{- $username := $cfg.username | default "" -}}
+{{- $subjectType := $cfg.subject_type | default 2 -}}
+{{- $currentType := $cfg.current_type | default 3 -}}
+{{- $completedType := $cfg.completed_type | default 2 -}}
+{{- $limitCurrent := $cfg.limit_current | default 24 -}}
+{{- $limitCompleted := $cfg.limit_completed | default 48 -}}
+<section class="anime-dashboard"
+  data-bangumi-username="{{ $username }}"
+  data-subject-type="{{ $subjectType }}"
+  data-current-type="{{ $currentType }}"
+  data-completed-type="{{ $completedType }}"
+  data-limit-current="{{ $limitCurrent }}"
+  data-limit-completed="{{ $limitCompleted }}">
+  <div class="anime-toolbar" role="tablist" aria-label="Anime collection filters">
+    <button class="anime-tab is-active" type="button" data-anime-tab="current" role="tab" aria-selected="true">Watching</button>
+    <button class="anime-tab" type="button" data-anime-tab="completed" role="tab" aria-selected="false">Completed</button>
+  </div>
+  <div class="anime-status" data-anime-status>Loading Bangumi collection...</div>
+  <div class="anime-grid" data-anime-grid></div>
+</section>

@@ -18,8 +18,8 @@ marketing:
     site_type: Person
     local_business_type: ''
     org_name: ''
-    description: 'A highly-customizable Hugo academic resume theme powered by Wowchemy website builder.'
-    twitter: 'wowchemy'
+    description: 'Changcheng Fu is a Ph.D. student at USC working on computer vision, large language models, and multimodal learning.'
+    twitter: 'ChangchengF'
   analytics:
     google_analytics: ''
     baidu_tongji: ''
@@ -45,7 +45,7 @@ header:
 
 footer:
   copyright:
-    notice: '© {year} Me. This work is licensed under {license}'
+    notice: 'Copyright {year} Changcheng Fu. This work is licensed under {license}'
     license:
       enable: true
       allow_derivatives: false

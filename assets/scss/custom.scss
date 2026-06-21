@@ -258,12 +258,123 @@ body {
 }
 
 .article:has(.anime-dashboard) > .article-container {
-  max-width: none;
-  width: calc(100vw - 2rem);
+  max-width: 2040px;
+  width: calc(100vw - 6rem);
 }
 
 .article:has(.anime-dashboard) .article-style {
   overflow: visible;
+}
+
+.article:has(.anime-dashboard) .anime-dashboard.wide-page-panel {
+  margin-left: 0;
+  transform: none;
+  width: 100%;
+}
+
+.pub .article-container {
+  max-width: 1280px;
+  width: calc(100vw - 6rem);
+}
+
+.pub .article-container.pt-3 {
+  padding-top: clamp(1.4rem, 4vw, 3rem) !important;
+}
+
+.pub .article-container.pt-3 h1 {
+  color: var(--cf-ink);
+  font-size: clamp(1.75rem, 2.4vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.18;
+  margin-bottom: 1rem;
+}
+
+.pub .article-metadata {
+  color: var(--cf-muted);
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.pub .btn-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.2rem;
+}
+
+.pub .btn-links .btn-page-header {
+  background: rgba(37, 111, 156, 0.08);
+  border: 1px solid rgba(37, 111, 156, 0.28);
+  color: var(--cf-accent);
+  font-weight: 700;
+  padding: 0.48rem 0.85rem;
+}
+
+.pub .btn-links .btn-page-header:hover {
+  background: var(--cf-accent);
+  color: #fff;
+  text-decoration: none;
+}
+
+.pub .article-container > h3 {
+  color: var(--cf-accent);
+  font-size: 1.02rem;
+  font-weight: 700;
+  margin-bottom: 0.85rem;
+  text-transform: uppercase;
+}
+
+.pub .pub-abstract {
+  color: var(--cf-muted);
+  font-size: 0.96rem;
+  line-height: 1.75;
+  margin-bottom: 1.25rem;
+}
+
+.pub .article-container > .row {
+  border-top: 1px solid var(--cf-line);
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0.85rem 0;
+}
+
+.pub .article-container > .row .row {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.pub .pub-row-heading {
+  color: var(--cf-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pub .article-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.pub .badge-light {
+  background: rgba(37, 111, 156, 0.1);
+  border-radius: 999px;
+  color: var(--cf-accent);
+  font-weight: 700;
+  padding: 0.32rem 0.6rem;
+}
+
+.pub .author-card {
+  border-top: 1px solid var(--cf-line);
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+}
+
+.pub .author-card .avatar {
+  height: 5rem;
+  width: 5rem;
 }
 
 .wide-page-panel {
@@ -657,6 +768,11 @@ body.dark {
     width: calc(100vw - 2rem);
   }
 
+  .article:has(.anime-dashboard) > .article-container,
+  .pub .article-container {
+    width: calc(100vw - 2rem);
+  }
+
   .anime-grid {
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   }
@@ -682,6 +798,11 @@ body.dark {
   }
 
   .wide-page-panel {
+    width: calc(100vw - 1.5rem);
+  }
+
+  .article:has(.anime-dashboard) > .article-container,
+  .pub .article-container {
     width: calc(100vw - 1.5rem);
   }
 

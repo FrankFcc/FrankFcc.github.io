@@ -12,6 +12,15 @@ sections:
     design:
       columns: '2'
 
+  - block: markdown
+    id: news
+    content:
+      title: Recent News
+      text: |-
+        {{< recent-news >}}
+    design:
+      columns: '1'
+
   - block: collection
     id: publications
     content:

@@ -159,6 +159,69 @@ body {
   margin: 0;
 }
 
+.recent-news-panel {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(22, 34, 51, 0.08);
+  padding: clamp(1rem, 2.2vw, 1.6rem);
+}
+
+.recent-news-list {
+  display: grid;
+  gap: 0.85rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recent-news-item {
+  border-bottom: 1px solid var(--cf-line);
+  display: grid;
+  gap: 0.3rem;
+  padding-bottom: 0.85rem;
+}
+
+.recent-news-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.recent-news-item time,
+.recent-news-empty span {
+  color: var(--cf-accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.recent-news-item a {
+  color: var(--cf-ink);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.recent-news-item p,
+.recent-news-empty p {
+  color: var(--cf-muted);
+  font-size: 0.94rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.recent-news-empty strong {
+  color: var(--cf-ink);
+  display: block;
+  font-size: 1.08rem;
+  margin: 0.35rem 0;
+}
+
+.recent-news-link {
+  display: inline-flex;
+  font-weight: 700;
+  margin-top: 1rem;
+}
+
 .universal-wrapper {
   max-width: 1100px;
 }
@@ -818,6 +881,7 @@ body.dark .wg-about-biography .container,
 body.dark .stream-item,
 body.dark .article-container,
 body.dark .cf-quick-card,
+body.dark .recent-news-panel,
 body.dark .anime-card,
 body.dark .visitor-panel,
 body.dark .visitor-panel-copy,

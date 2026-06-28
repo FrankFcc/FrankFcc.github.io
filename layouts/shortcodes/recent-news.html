@@ -1,0 +1,26 @@
+{{- $feed := site.Data.linkedin_news | default dict -}}
+{{- $items := $feed.items | default slice -}}
+{{- $profileURL := $feed.profile_url | default "https://www.linkedin.com/in/changcheng-fu/" -}}
+<div class="recent-news-panel">
+  {{- if gt (len $items) 0 -}}
+    <ol class="recent-news-list">
+      {{- range first 6 $items -}}
+        {{- $title := .title | default (.summary | default .text) -}}
+        <li class="recent-news-item">
+          <time datetime="{{ .published_at }}">{{ .date_label | default .published_at }}</time>
+          <a href="{{ .url }}" target="_blank" rel="noopener">{{ $title | plainify | truncate 120 }}</a>
+          {{- with .summary -}}
+            <p>{{ . | plainify | truncate 190 }}</p>
+          {{- end -}}
+        </li>
+      {{- end -}}
+    </ol>
+  {{- else -}}
+    <div class="recent-news-empty">
+      <span>LinkedIn</span>
+      <strong>Recent updates are syncing soon.</strong>
+      <p>Research notes, publication updates, and project posts are available on LinkedIn.</p>
+    </div>
+  {{- end -}}
+  <a class="recent-news-link" href="{{ $profileURL }}" target="_blank" rel="noopener">View LinkedIn activity</a>
+</div>

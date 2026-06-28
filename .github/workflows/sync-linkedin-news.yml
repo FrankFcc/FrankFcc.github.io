@@ -1,0 +1,43 @@
+name: Sync LinkedIn news
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.repository_owner != 'wowchemy'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync LinkedIn posts
+        env:
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
+          LINKEDIN_PROFILE_URL: ${{ vars.LINKEDIN_PROFILE_URL || 'https://www.linkedin.com/in/changcheng-fu/' }}
+          LINKEDIN_VERSION: ${{ vars.LINKEDIN_VERSION || '202606' }}
+          LINKEDIN_POST_COUNT: ${{ vars.LINKEDIN_POST_COUNT || '6' }}
+        run: node scripts/sync-linkedin-news.mjs
+
+      - name: Commit synced news
+        run: |
+          if git diff --quiet -- data/linkedin_news.json; then
+            echo "No LinkedIn news changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/linkedin_news.json
+          git commit -m "Sync LinkedIn news"
+          git push

@@ -201,6 +201,13 @@ body {
   font-weight: 700;
 }
 
+.recent-news-item .recent-news-source {
+  color: var(--cf-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
 .recent-news-item p,
 .recent-news-empty p {
   color: var(--cf-muted);

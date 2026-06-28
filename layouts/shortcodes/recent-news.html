@@ -1,26 +1,28 @@
-{{- $feed := site.Data.linkedin_news | default dict -}}
-{{- $items := $feed.items | default slice -}}
-{{- $profileURL := $feed.profile_url | default "https://www.linkedin.com/in/changcheng-fu/" -}}
+{{- $posts := where site.RegularPages "Section" "post" -}}
+{{- $items := where $posts "Params.show_recent_news" true -}}
+{{- $items = first 6 (sort $items "Date" "desc") -}}
 <div class="recent-news-panel">
   {{- if gt (len $items) 0 -}}
     <ol class="recent-news-list">
-      {{- range first 6 $items -}}
-        {{- $title := .title | default (.summary | default .text) -}}
+      {{- range $items -}}
         <li class="recent-news-item">
-          <time datetime="{{ .published_at }}">{{ .date_label | default .published_at }}</time>
-          <a href="{{ .url }}" target="_blank" rel="noopener">{{ $title | plainify | truncate 120 }}</a>
-          {{- with .summary -}}
+          <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "Jan 2, 2006" }}</time>
+          <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+          {{- with .Params.summary -}}
             <p>{{ . | plainify | truncate 190 }}</p>
+          {{- end -}}
+          {{- with .Params.linkedin_url -}}
+            <a class="recent-news-source" href="{{ . }}" target="_blank" rel="noopener">LinkedIn post</a>
           {{- end -}}
         </li>
       {{- end -}}
     </ol>
   {{- else -}}
     <div class="recent-news-empty">
-      <span>LinkedIn</span>
-      <strong>Recent updates are syncing soon.</strong>
-      <p>Research notes, publication updates, and project posts are available on LinkedIn.</p>
+      <span>Posts</span>
+      <strong>No posts are checked for Recent News yet.</strong>
+      <p>Add <code>show_recent_news: true</code> to a post's front matter to show it here.</p>
     </div>
   {{- end -}}
-  <a class="recent-news-link" href="{{ $profileURL }}" target="_blank" rel="noopener">View LinkedIn activity</a>
+  <a class="recent-news-link" href="/post/">View all posts</a>
 </div>

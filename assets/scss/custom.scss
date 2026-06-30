@@ -814,19 +814,21 @@ body {
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--cf-line);
   border-radius: 8px;
-  box-shadow: var(--cf-shadow);
+  box-shadow: 0 14px 34px rgba(22, 34, 51, 0.08);
   display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(12rem, 0.55fr) minmax(20rem, 1.45fr);
-  min-height: 18rem;
-  padding: clamp(0.85rem, 1.8vw, 1.35rem);
+  gap: 1.1rem;
+  grid-template-columns: minmax(13rem, 0.55fr) minmax(18rem, 1.1fr);
+  min-height: 0;
+  padding: clamp(0.9rem, 1.8vw, 1.4rem);
 }
 
 .visitor-panel-copy {
   background: var(--cf-surface-soft);
   border: 1px solid var(--cf-line);
   border-radius: 8px;
-  padding: 0.95rem;
+  display: grid;
+  align-content: center;
+  padding: 1rem;
 }
 
 .visitor-panel-copy span {
@@ -853,25 +855,49 @@ body {
 
 .visitor-panel-map {
   align-items: center;
-  background: linear-gradient(145deg, #0f1722, #1d2433);
+  background:
+    linear-gradient(145deg, rgba(37, 111, 156, 0.08), rgba(255, 255, 255, 0.72)),
+    var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
   border-radius: 8px;
   display: flex;
-  justify-content: center;
   min-height: 16rem;
+  justify-content: center;
   overflow: hidden;
   padding: 0.85rem;
 }
 
-.visitor-panel-map iframe,
-.visitor-panel-map img,
-.visitor-panel-map object {
-  max-width: 100%;
+.visitor-map-frame {
+  align-items: center;
+  aspect-ratio: 300 / 190;
+  background: #2d78ad;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  box-shadow: 0 14px 30px rgba(22, 34, 51, 0.14);
+  display: flex;
+  justify-content: center;
+  max-width: 38rem;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  width: 100%;
 }
 
-.visitor-panel-map > span {
-  flex: 0 0 auto;
-  margin-right: 0 !important;
-  transform-origin: center center;
+.visitor-map-frame iframe,
+.visitor-map-frame img,
+.visitor-map-frame object,
+.visitor-map-frame canvas,
+.visitor-map-frame svg,
+.visitor-map-frame > * {
+  border: 0 !important;
+  border-radius: 8px;
+  max-width: 100% !important;
+}
+
+.visitor-map-frame img,
+.visitor-map-frame canvas,
+.visitor-map-frame svg {
+  height: auto !important;
 }
 
 .maimai-map-app {
@@ -1287,8 +1313,8 @@ body.dark .anime-controls select {
     max-height: 24rem;
   }
 
-  .visitor-panel-map > span {
-    transform: scale(0.78);
+  .visitor-map-frame {
+    max-width: 32rem;
   }
 
   #profile {
@@ -1403,8 +1429,8 @@ body.dark .anime-controls select {
     min-height: 12rem;
   }
 
-  .visitor-panel-map > span {
-    transform: scale(0.45);
+  .visitor-map-frame {
+    width: 100%;
   }
 }
 

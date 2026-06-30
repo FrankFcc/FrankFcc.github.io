@@ -1355,6 +1355,12 @@ body.dark .maimai-map-list-panel {
   border-color: var(--cf-line);
 }
 
+body.dark .maimai-map-list-panel,
+body.dark .maimai-map-list-head,
+body.dark .maimai-map-item {
+  color: var(--cf-ink);
+}
+
 body.dark .network-icon li a:hover,
 body.dark .cf-quick-card:hover,
 body.dark .stream-item:hover {

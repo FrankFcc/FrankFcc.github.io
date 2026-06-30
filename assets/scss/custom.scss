@@ -1231,24 +1231,215 @@ body.dark .maimai-map-toolbar,
 body.dark .maimai-map-controls,
 body.dark .maimai-map-layout,
 body.dark .maimai-map-source {
-  --cf-ink: #eef3f8;
-  --cf-muted: #b7c2d0;
-  --cf-line: rgba(238, 243, 248, 0.12);
+  --cf-ink: #eef5fb;
+  --cf-muted: #b8c7d8;
+  --cf-line: rgba(211, 225, 239, 0.16);
   --cf-surface: #101722;
-  --cf-surface-soft: #151f2c;
-  background-color: rgba(16, 23, 34, 0.9);
+  --cf-surface-soft: #172333;
+  --cf-accent: #8ccdf2;
+  --cf-shadow: 0 18px 45px rgba(0, 0, 0, 0.38);
+  background-color: rgba(16, 23, 34, 0.92);
 }
 
 body.dark {
   background:
-    radial-gradient(circle at top left, rgba(91, 149, 194, 0.17), transparent 34rem),
-    linear-gradient(180deg, #0e141e 0%, #111926 100%);
+    radial-gradient(circle at top left, rgba(86, 160, 214, 0.18), transparent 34rem),
+    linear-gradient(180deg, #0c121b 0%, #111926 54%, #0d141f 100%);
+  color: var(--cf-ink);
+  color-scheme: dark;
+}
+
+body.dark .home-section {
+  background: transparent !important;
+}
+
+body.dark .navbar {
+  background: rgba(13, 19, 28, 0.94) !important;
+  border-bottom-color: var(--cf-line);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
+}
+
+body.dark .navbar-brand,
+body.dark .navbar-nav .nav-link,
+body.dark .navbar .nav-link,
+body.dark .navbar .nav-link i {
+  color: var(--cf-ink) !important;
+}
+
+body.dark .navbar-nav .nav-link:hover,
+body.dark .navbar-nav .nav-link.active {
+  background: rgba(140, 205, 242, 0.14);
+  color: var(--cf-accent) !important;
+}
+
+body.dark .dropdown-menu {
+  background: var(--cf-surface);
+  border-color: var(--cf-line);
+  box-shadow: var(--cf-shadow);
+}
+
+body.dark .dropdown-item {
+  color: var(--cf-ink);
+}
+
+body.dark .dropdown-item:hover,
+body.dark .dropdown-item:focus,
+body.dark .dropdown-item-active {
+  background: rgba(140, 205, 242, 0.14);
+  color: var(--cf-accent);
+}
+
+body.dark a,
+body.dark .recent-news-link,
+body.dark .maimai-map-source a {
+  color: var(--cf-accent);
+}
+
+body.dark .article-style p,
+body.dark .summary-link .article-style,
+body.dark .cf-quick-card p,
+body.dark .recent-news-item p,
+body.dark .recent-news-empty p,
+body.dark .anime-summary,
+body.dark .anime-comment,
+body.dark .anime-meta,
+body.dark .anime-status,
+body.dark .maimai-map-status,
+body.dark .maimai-map-list-note,
+body.dark .maimai-map-source,
+body.dark .visitor-panel-copy p {
+  color: var(--cf-muted);
+}
+
+body.dark .section-subheading,
+body.dark .cf-quick-card,
+body.dark .cf-quick-card strong,
+body.dark .recent-news-item a,
+body.dark .recent-news-empty strong,
+body.dark .stream-item a,
+body.dark .anime-card h2 a,
+body.dark .anime-rating span,
+body.dark .maimai-map-heading strong,
+body.dark .maimai-map-list-head strong,
+body.dark .maimai-map-item strong,
+body.dark .visitor-panel-copy strong {
+  color: var(--cf-ink);
+}
+
+body.dark .wg-about-biography .container,
+body.dark .stream-item,
+body.dark .article-container,
+body.dark .cf-quick-card,
+body.dark .recent-news-panel,
+body.dark .anime-card,
+body.dark .anime-setup,
+body.dark .visitor-panel,
+body.dark .visitor-panel-copy,
+body.dark .maimai-map-toolbar,
+body.dark .maimai-map-controls,
+body.dark .maimai-map-layout,
+body.dark .maimai-map-source {
+  border-color: var(--cf-line);
+  box-shadow: var(--cf-shadow);
+}
+
+body.dark .network-icon li a,
+body.dark .anime-toolbar,
+body.dark .maimai-map-tabs,
+body.dark .anime-rating span,
+body.dark .anime-cover,
+body.dark .memory-empty,
+body.dark .maimai-map-item,
+body.dark .maimai-map-list-panel {
+  background: var(--cf-surface-soft);
+  border-color: var(--cf-line);
+}
+
+body.dark .network-icon li a:hover,
+body.dark .cf-quick-card:hover,
+body.dark .stream-item:hover {
+  background: rgba(140, 205, 242, 0.1);
+  border-color: rgba(140, 205, 242, 0.34);
+}
+
+body.dark .cf-quick-card span,
+body.dark .recent-news-item time,
+body.dark .recent-news-empty span,
+body.dark .recent-news-item .recent-news-source,
+body.dark .anime-kicker,
+body.dark .anime-rating strong,
+body.dark .visitor-panel-copy span,
+body.dark .maimai-map-heading span,
+body.dark .maimai-map-item span,
+body.dark .maimai-map-exports span {
+  color: var(--cf-accent);
+}
+
+body.dark .anime-tab,
+body.dark .maimai-map-tabs button {
+  color: var(--cf-muted);
+}
+
+body.dark .anime-tab.is-active,
+body.dark .maimai-map-tabs button.is-active {
+  background: rgba(140, 205, 242, 0.18);
+  border-color: rgba(140, 205, 242, 0.34);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+  color: var(--cf-ink);
+}
+
+body.dark .anime-clear,
+body.dark .anime-load-more,
+body.dark .anime-tags span,
+body.dark .maimai-map-stats span,
+body.dark .maimai-map-list-head a,
+body.dark .maimai-map-item button,
+body.dark .maimai-map-item a,
+body.dark .maimai-map-exports a {
+  background: rgba(140, 205, 242, 0.11);
+  border-color: rgba(140, 205, 242, 0.28);
+  color: var(--cf-accent);
+}
+
+body.dark .anime-clear:hover,
+body.dark .anime-load-more:hover,
+body.dark .maimai-map-item button:hover,
+body.dark .maimai-map-item a:hover,
+body.dark .maimai-map-list-head a:hover,
+body.dark .maimai-map-exports a:hover {
+  background: var(--cf-accent);
+  color: #07111b;
 }
 
 body.dark .anime-controls input,
-body.dark .anime-controls select {
-  background-color: var(--cf-surface-soft);
+body.dark .anime-controls select,
+body.dark .anime-setup input,
+body.dark .maimai-map-controls input,
+body.dark .maimai-map-controls select {
+  background-color: var(--cf-surface);
+  border-color: var(--cf-line);
   color: var(--cf-ink);
+}
+
+body.dark .anime-controls input::placeholder,
+body.dark .anime-setup input::placeholder,
+body.dark .maimai-map-controls input::placeholder {
+  color: #7f8da0;
+}
+
+body.dark .visitor-panel-map {
+  background:
+    linear-gradient(145deg, rgba(140, 205, 242, 0.12), rgba(16, 23, 34, 0.72)),
+    var(--cf-surface-soft);
+}
+
+body.dark .visitor-map-frame {
+  border-color: rgba(238, 245, 251, 0.2);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
+}
+
+body.dark .maimai-map-list {
+  background: var(--cf-surface);
 }
 
 @media (max-width: 991.98px) {

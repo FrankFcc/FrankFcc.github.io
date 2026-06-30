@@ -43,13 +43,13 @@ body {
 }
 
 .home-section {
-  padding: 5.2rem 0;
+  padding: 3.25rem 0;
 }
 
 .wg-about-biography {
   align-items: center;
   display: flex;
-  min-height: calc(100vh - 5rem);
+  min-height: calc(82vh - 4rem);
 }
 
 .wg-about-biography .container {
@@ -57,7 +57,7 @@ body {
   border: 1px solid var(--cf-line);
   border-radius: 8px;
   box-shadow: var(--cf-shadow);
-  padding: clamp(1.4rem, 4vw, 3rem);
+  padding: clamp(1.15rem, 3vw, 2.25rem);
 }
 
 #profile {
@@ -71,7 +71,7 @@ body {
 
 .portrait-title h2 {
   font-size: clamp(1.75rem, 4vw, 2.7rem);
-  margin-top: 1.2rem;
+  margin-top: 0.85rem;
 }
 
 .portrait-title h3 {
@@ -81,7 +81,7 @@ body {
 }
 
 .network-icon {
-  margin-top: 1.2rem;
+  margin-top: 0.85rem;
 }
 
 .network-icon li a {
@@ -125,8 +125,8 @@ body {
   border-radius: 8px;
   color: var(--cf-ink);
   display: block;
-  min-height: 10rem;
-  padding: 1.15rem;
+  min-height: 8rem;
+  padding: 0.95rem;
   text-decoration: none;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
@@ -143,14 +143,14 @@ body {
   display: block;
   font-size: 0.78rem;
   font-weight: 700;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.42rem;
   text-transform: uppercase;
 }
 
 .cf-quick-card strong {
   display: block;
   font-size: 1.15rem;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.32rem;
 }
 
 .cf-quick-card p {
@@ -164,7 +164,7 @@ body {
   border: 1px solid var(--cf-line);
   border-radius: 8px;
   box-shadow: 0 12px 28px rgba(22, 34, 51, 0.08);
-  padding: clamp(1rem, 2.2vw, 1.6rem);
+  padding: clamp(0.85rem, 1.8vw, 1.35rem);
 }
 
 .recent-news-list {
@@ -816,18 +816,17 @@ body {
   border-radius: 8px;
   box-shadow: var(--cf-shadow);
   display: grid;
-  gap: 1.25rem;
-  grid-template-columns: minmax(13rem, 0.85fr) minmax(20rem, 1.6fr) minmax(10rem, 0.55fr);
-  min-height: 24rem;
-  padding: clamp(1rem, 2.2vw, 1.8rem);
+  gap: 1rem;
+  grid-template-columns: minmax(12rem, 0.55fr) minmax(20rem, 1.45fr);
+  min-height: 18rem;
+  padding: clamp(0.85rem, 1.8vw, 1.35rem);
 }
 
-.visitor-panel-copy,
-.visitor-panel-count {
+.visitor-panel-copy {
   background: var(--cf-surface-soft);
   border: 1px solid var(--cf-line);
   border-radius: 8px;
-  padding: 1.1rem;
+  padding: 0.95rem;
 }
 
 .visitor-panel-copy span {
@@ -841,20 +840,15 @@ body {
 
 .visitor-panel-copy strong {
   display: block;
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   line-height: 1.2;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.55rem;
 }
 
 .visitor-panel-copy p {
   color: var(--cf-muted);
-  line-height: 1.6;
-  margin-bottom: 1rem;
-}
-
-.visitor-panel-copy a {
-  color: var(--cf-accent);
-  font-weight: 700;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .visitor-panel-map {
@@ -863,7 +857,7 @@ body {
   border-radius: 8px;
   display: flex;
   justify-content: center;
-  min-height: 20rem;
+  min-height: 16rem;
   overflow: hidden;
   padding: 0.85rem;
 }
@@ -878,14 +872,6 @@ body {
   flex: 0 0 auto;
   margin-right: 0 !important;
   transform-origin: center center;
-}
-
-.visitor-panel-count {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  min-width: 0;
-  text-align: center;
 }
 
 .maimai-map-app {
@@ -1215,7 +1201,6 @@ body.dark .recent-news-panel,
 body.dark .anime-card,
 body.dark .visitor-panel,
 body.dark .visitor-panel-copy,
-body.dark .visitor-panel-count,
 body.dark .maimai-map-toolbar,
 body.dark .maimai-map-controls,
 body.dark .maimai-map-layout,
@@ -1336,7 +1321,7 @@ body.dark .anime-controls select {
   }
 
   .home-section {
-    padding: 3.4rem 0;
+    padding: 2.4rem 0;
   }
 
   .wg-about-biography .container {
@@ -1415,7 +1400,7 @@ body.dark .anime-controls select {
   }
 
   .visitor-panel-map {
-    min-height: 15rem;
+    min-height: 12rem;
   }
 
   .visitor-panel-map > span {

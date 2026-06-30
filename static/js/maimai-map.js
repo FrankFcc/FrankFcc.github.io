@@ -10,7 +10,6 @@
     status: root.querySelector("[data-status]"),
     search: root.querySelector("[data-search]"),
     subregion: root.querySelector("[data-subregion]"),
-    key: root.querySelector("[data-api-key]"),
     map: root.querySelector("[data-map]"),
     list: root.querySelector("[data-list]"),
     visibleCount: root.querySelector("[data-visible-count]"),
@@ -39,7 +38,7 @@
       localStorage.setItem("maimaiGoogleMapsKey", fromUrl);
       return fromUrl;
     }
-    if (root.dataset.googleMapsKey) return root.dataset.googleMapsKey;
+    if (root.dataset.googleMapsKey) return root.dataset.googleMapsKey.trim();
     return localStorage.getItem("maimaiGoogleMapsKey") || "";
   }
 
@@ -286,12 +285,6 @@
     els.subregion.addEventListener("change", () => {
       state.subregion = els.subregion.value;
       applyFilters();
-    });
-    els.key.value = getApiKey();
-    els.key.addEventListener("change", () => {
-      const key = els.key.value.trim();
-      if (key) localStorage.setItem("maimaiGoogleMapsKey", key);
-      loadGoogleMaps(key);
     });
     els.list.addEventListener("click", (event) => {
       const button = event.target.closest("[data-focus]");

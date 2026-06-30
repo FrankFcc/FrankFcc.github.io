@@ -67,7 +67,6 @@ const elements = {
   "[data-status]": new FakeElement(),
   "[data-search]": new FakeElement(),
   "[data-subregion]": new FakeElement(),
-  "[data-api-key]": new FakeElement(),
   "[data-map]": new FakeElement(),
   "[data-list]": new FakeElement(),
   "[data-visible-count]": new FakeElement(),

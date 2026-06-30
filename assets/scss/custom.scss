@@ -332,7 +332,25 @@ body {
   width: calc(100vw - 6rem);
 }
 
+.article:has(.maimai-map-app) > .article-container {
+  max-width: 2040px;
+  width: calc(100vw - 6rem);
+}
+
+.article.maimai-map-page > .article-container {
+  max-width: 2040px;
+  width: calc(100vw - 6rem);
+}
+
 .article:has(.anime-dashboard) .article-style {
+  overflow: visible;
+}
+
+.article:has(.maimai-map-app) .article-style {
+  overflow: visible;
+}
+
+.article.maimai-map-page .article-style {
   overflow: visible;
 }
 
@@ -870,6 +888,311 @@ body {
   text-align: center;
 }
 
+.maimai-map-app {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.maimai-map-toolbar,
+.maimai-map-controls,
+.maimai-map-layout,
+.maimai-map-source {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(22, 34, 51, 0.08);
+}
+
+.maimai-map-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.maimai-map-heading span {
+  color: var(--cf-accent);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+
+.maimai-map-heading strong {
+  display: block;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  line-height: 1.16;
+}
+
+.maimai-map-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.maimai-map-stats span,
+.maimai-map-tabs button,
+.maimai-map-list-head a,
+.maimai-map-item button,
+.maimai-map-item a {
+  background: rgba(37, 111, 156, 0.08);
+  border: 1px solid rgba(37, 111, 156, 0.22);
+  border-radius: 999px;
+  color: var(--cf-accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.42rem 0.68rem;
+}
+
+.maimai-map-controls {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(14rem, 1fr) minmax(11rem, 0.7fr) minmax(13rem, 0.75fr);
+  padding: 0.85rem;
+}
+
+.maimai-map-tabs {
+  background: var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
+  border-radius: 999px;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+
+.maimai-map-tabs button {
+  background: transparent;
+  border-color: transparent;
+  cursor: pointer;
+}
+
+.maimai-map-tabs button.is-active {
+  background: #fff;
+  border-color: var(--cf-line);
+  box-shadow: 0 6px 16px rgba(22, 34, 51, 0.1);
+}
+
+.maimai-map-controls label {
+  color: var(--cf-muted);
+  display: grid;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 0.32rem;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.maimai-map-controls input,
+.maimai-map-controls select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  color: var(--cf-ink);
+  font-size: 0.94rem;
+  height: 2.65rem;
+  min-width: 0;
+  padding: 0.55rem 0.68rem;
+}
+
+.maimai-map-controls select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--cf-muted) 50%),
+    linear-gradient(135deg, var(--cf-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1rem) 1.08rem,
+    calc(100% - 0.68rem) 1.08rem;
+  background-repeat: no-repeat;
+  background-size: 0.32rem 0.32rem;
+  padding-right: 2rem;
+}
+
+.maimai-map-status {
+  color: var(--cf-muted);
+  font-size: 0.92rem;
+}
+
+.maimai-map-exports {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.maimai-map-exports span {
+  color: var(--cf-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.maimai-map-exports a {
+  background: rgba(37, 111, 156, 0.08);
+  border: 1px solid rgba(37, 111, 156, 0.22);
+  border-radius: 999px;
+  color: var(--cf-accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.42rem 0.68rem;
+  text-decoration: none;
+}
+
+.maimai-map-exports a:hover {
+  background: var(--cf-accent);
+  color: #fff;
+}
+
+.maimai-map-layout {
+  display: grid;
+  grid-template-columns: minmax(22rem, 1.7fr) minmax(19rem, 0.8fr);
+  min-height: 42rem;
+  overflow: hidden;
+}
+
+.maimai-map-canvas {
+  background: linear-gradient(145deg, #102235, #20344a);
+  min-height: 42rem;
+  position: relative;
+}
+
+.maimai-map-canvas.is-loaded .maimai-map-placeholder {
+  display: none;
+}
+
+.maimai-map-placeholder {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  inset: 0;
+  justify-content: center;
+  padding: 1.5rem;
+  position: absolute;
+  text-align: center;
+}
+
+.maimai-map-placeholder strong {
+  font-size: 1.35rem;
+}
+
+.maimai-map-list-panel {
+  border-left: 1px solid var(--cf-line);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.maimai-map-list-head {
+  align-items: center;
+  border-bottom: 1px solid var(--cf-line);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.8rem;
+}
+
+.maimai-map-list-head strong {
+  font-size: 1rem;
+}
+
+.maimai-map-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 42rem;
+  overflow: auto;
+  padding: 0.8rem;
+}
+
+.maimai-map-item {
+  background: var(--cf-surface-soft);
+  border: 1px solid var(--cf-line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem;
+}
+
+.maimai-map-item span {
+  color: var(--cf-accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.maimai-map-item strong {
+  color: var(--cf-ink);
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
+
+.maimai-map-item p {
+  color: var(--cf-muted);
+  font-size: 0.86rem;
+  line-height: 1.48;
+  margin: 0;
+}
+
+.maimai-map-item div {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.maimai-map-item button,
+.maimai-map-item a,
+.maimai-map-list-head a {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.maimai-map-item button:hover,
+.maimai-map-item a:hover,
+.maimai-map-list-head a:hover {
+  background: var(--cf-accent);
+  color: #fff;
+}
+
+.maimai-map-list-note {
+  color: var(--cf-muted);
+  font-size: 0.84rem;
+  margin: 0;
+  padding: 0.4rem;
+}
+
+.maimai-map-info {
+  color: #1d2433;
+  display: grid;
+  gap: 0.28rem;
+  max-width: 18rem;
+}
+
+.maimai-map-info strong {
+  font-size: 0.98rem;
+}
+
+.maimai-map-info span,
+.maimai-map-info p {
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.maimai-map-source {
+  color: var(--cf-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  padding: 0.85rem 1rem;
+}
+
+.maimai-map-source a {
+  color: var(--cf-accent);
+  font-weight: 700;
+}
+
 .reveal-item {
   opacity: 1;
   transform: translateY(14px);
@@ -892,7 +1215,11 @@ body.dark .recent-news-panel,
 body.dark .anime-card,
 body.dark .visitor-panel,
 body.dark .visitor-panel-copy,
-body.dark .visitor-panel-count {
+body.dark .visitor-panel-count,
+body.dark .maimai-map-toolbar,
+body.dark .maimai-map-controls,
+body.dark .maimai-map-layout,
+body.dark .maimai-map-source {
   --cf-ink: #eef3f8;
   --cf-muted: #b7c2d0;
   --cf-line: rgba(238, 243, 248, 0.12);
@@ -927,6 +1254,14 @@ body.dark .anime-controls select {
     width: calc(100vw - 2rem);
   }
 
+  .article:has(.maimai-map-app) > .article-container {
+    width: calc(100vw - 2rem);
+  }
+
+  .article.maimai-map-page > .article-container {
+    width: calc(100vw - 2rem);
+  }
+
   .anime-grid {
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   }
@@ -938,6 +1273,33 @@ body.dark .anime-controls select {
 
   .visitor-panel {
     grid-template-columns: 1fr;
+  }
+
+  .maimai-map-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .maimai-map-tabs {
+    grid-column: 1 / -1;
+    width: fit-content;
+  }
+
+  .maimai-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .maimai-map-list-panel {
+    border-left: 0;
+    border-top: 1px solid var(--cf-line);
+  }
+
+  .maimai-map-canvas,
+  .maimai-map-layout {
+    min-height: 32rem;
+  }
+
+  .maimai-map-list {
+    max-height: 24rem;
   }
 
   .visitor-panel-map > span {
@@ -962,6 +1324,14 @@ body.dark .anime-controls select {
 
   .article:has(.anime-dashboard) > .article-container,
   .pub .article-container {
+    width: calc(100vw - 1.5rem);
+  }
+
+  .article:has(.maimai-map-app) > .article-container {
+    width: calc(100vw - 1.5rem);
+  }
+
+  .article.maimai-map-page > .article-container {
     width: calc(100vw - 1.5rem);
   }
 
@@ -1016,6 +1386,32 @@ body.dark .anime-controls select {
   .visitor-panel {
     min-height: 0;
     padding: 0.8rem;
+  }
+
+  .maimai-map-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .maimai-map-stats {
+    justify-content: flex-start;
+  }
+
+  .maimai-map-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .maimai-map-tabs {
+    width: 100%;
+  }
+
+  .maimai-map-tabs button {
+    flex: 1;
+  }
+
+  .maimai-map-canvas,
+  .maimai-map-layout {
+    min-height: 24rem;
   }
 
   .visitor-panel-map {

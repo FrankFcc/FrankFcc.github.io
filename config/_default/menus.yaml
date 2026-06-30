@@ -22,6 +22,9 @@ main:
   - name: myAnime
     url: '/myanime/'
     weight: 60
+  - name: maimai Map
+    url: '/maimai-map/'
+    weight: 65
   - name: CV
     url: '/uploads/resume.pdf'
     weight: 70

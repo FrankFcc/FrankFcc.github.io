@@ -1,0 +1,67 @@
+{{ $mapsKey := site.Params.maimai_google_maps_key | default (os.Getenv "HUGO_MAIMAI_GOOGLE_MAPS_KEY") }}
+<script>
+  document.currentScript.closest(".article")?.classList.add("maimai-map-page");
+</script>
+<div class="maimai-map-app" data-maimai-map data-data-url="/data/maimai_locations.json" data-google-maps-key="{{ $mapsKey }}">
+  <div class="maimai-map-toolbar">
+    <div class="maimai-map-heading">
+      <span>Arcade Locator</span>
+      <strong>maimai Japan + United States</strong>
+    </div>
+    <div class="maimai-map-stats" aria-label="Location totals">
+      <span data-stat-total>...</span>
+      <span data-stat-jp>...</span>
+      <span data-stat-us>...</span>
+    </div>
+  </div>
+
+  <div class="maimai-map-controls">
+    <div class="maimai-map-tabs" role="tablist" aria-label="Region filter">
+      <button type="button" class="is-active" data-region="all">All</button>
+      <button type="button" data-region="Japan">Japan</button>
+      <button type="button" data-region="United States">US</button>
+    </div>
+    <label>
+      <span>Search</span>
+      <input type="search" data-search placeholder="Store, address, state, prefecture">
+    </label>
+    <label>
+      <span>Area</span>
+      <select data-subregion>
+        <option value="">All areas</option>
+      </select>
+    </label>
+    <label class="maimai-map-key">
+      <span>Google Maps key</span>
+      <input type="password" data-api-key placeholder="Paste key for markers">
+    </label>
+  </div>
+
+  <div class="maimai-map-status" data-status>Loading official location data...</div>
+
+  <div class="maimai-map-exports">
+    <span>Google My Maps import</span>
+    <a href="https://www.google.com/maps/d/" target="_blank" rel="noopener">Open My Maps</a>
+    <a href="/data/maimai_locations.csv" download>Download CSV</a>
+    <a href="/data/maimai_locations.kml" download>Download KML</a>
+  </div>
+
+  <div class="maimai-map-layout">
+    <div class="maimai-map-canvas" data-map aria-label="maimai Google Map">
+      <div class="maimai-map-placeholder">
+        <strong>Google Maps key needed</strong>
+        <span>The location list is loaded. Add a key above to draw markers.</span>
+      </div>
+    </div>
+    <aside class="maimai-map-list-panel">
+      <div class="maimai-map-list-head">
+        <strong data-visible-count>0 locations</strong>
+        <a data-open-visible href="https://www.google.com/maps/search/maimai" target="_blank" rel="noopener">Open search</a>
+      </div>
+      <div class="maimai-map-list" data-list></div>
+    </aside>
+  </div>
+
+  <div class="maimai-map-source" data-source></div>
+</div>
+<script src="/js/maimai-map.js" defer></script>

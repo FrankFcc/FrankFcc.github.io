@@ -61,6 +61,8 @@ locale:
 
 # Site features
 
+maimai_google_maps_key: 'AIzaSyAwi8CI51wjWkgBSHm0lLDL56QKjXTLcjk'
+
 features:
   syntax_highlighter:
     theme_light: github-light

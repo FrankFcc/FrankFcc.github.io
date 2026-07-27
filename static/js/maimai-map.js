@@ -27,7 +27,9 @@
     subregion: "",
     map: null,
     info: null,
+    infoLocationId: null,
     markers: new Map(),
+    clusterer: null,
     apiReady: false,
   };
 
@@ -175,9 +177,36 @@
       fullscreenControl: true,
     });
     state.info = new google.maps.InfoWindow();
+    state.clusterer = createMarkerClusterer();
     els.map.classList.add("is-loaded");
     renderMarkers();
     updateBounds();
+  }
+
+  function createMarkerClusterer() {
+    const clusterLibrary = window.markerClusterer;
+    const MarkerClusterer = clusterLibrary?.MarkerClusterer;
+    if (!MarkerClusterer) return null;
+    try {
+      const algorithm = clusterLibrary.SuperClusterViewportAlgorithm
+        ? new clusterLibrary.SuperClusterViewportAlgorithm({
+          // Keep list-item focus at zoom 15 showing the individual location.
+          maxZoom: 14,
+          // Retain a small off-screen buffer so clusters do not pop at the edge.
+          viewportPadding: 80,
+        })
+        : undefined;
+      return new MarkerClusterer({
+        map: state.map,
+        markers: [],
+        ...(algorithm
+          ? { algorithm }
+          : { algorithmOptions: { maxZoom: 14 } }),
+      });
+    } catch (error) {
+      console.warn("Marker clustering is unavailable; using individual markers.", error);
+      return null;
+    }
   }
 
   function hasCoordinates(location) {
@@ -189,28 +218,39 @@
     const suffix = unmappedCount
       ? ` ${unmappedCount.toLocaleString()} filtered locations do not include official coordinates and remain list-only.`
       : "";
-    setStatus(`${mappedCount.toLocaleString()} Google Maps markers loaded from the official coordinate dataset.${suffix}`);
+    const displayMode = state.clusterer
+      ? "mapped locations grouped into zoomable clusters"
+      : "Google Maps markers loaded";
+    setStatus(`${mappedCount.toLocaleString()} ${displayMode} from the official coordinate dataset.${suffix}`);
   }
 
   function renderMarkers() {
     if (!state.apiReady || !state.map) return;
     const visibleIds = new Set(state.filtered.map((location) => location.id));
-    for (const [id, marker] of state.markers) {
-      if (!visibleIds.has(id)) marker.setMap(null);
+    if (state.infoLocationId && !visibleIds.has(state.infoLocationId)) {
+      state.info.close();
+      state.infoLocationId = null;
+    }
+    if (!state.clusterer) {
+      for (const [id, marker] of state.markers) {
+        if (!visibleIds.has(id)) marker.setMap(null);
+      }
     }
 
     let unmappedCount = 0;
+    const visibleMarkers = [];
     state.filtered.forEach((location) => {
       if (!hasCoordinates(location)) {
         unmappedCount += 1;
         return;
       }
       if (state.markers.has(location.id)) {
-        state.markers.get(location.id).setMap(state.map);
+        const marker = state.markers.get(location.id);
+        visibleMarkers.push(marker);
+        if (!state.clusterer) marker.setMap(state.map);
         return;
       }
       const marker = new google.maps.Marker({
-        map: state.map,
         position: { lat: location.lat, lng: location.lng },
         title: location.name,
         icon: {
@@ -224,11 +264,19 @@
       });
       marker.addListener("click", () => openInfo(location, marker));
       state.markers.set(location.id, marker);
+      visibleMarkers.push(marker);
+      if (!state.clusterer) marker.setMap(state.map);
     });
+    if (state.clusterer) {
+      state.clusterer.clearMarkers(true);
+      state.clusterer.addMarkers(visibleMarkers, true);
+      state.clusterer.render();
+    }
     updateMapStatus(unmappedCount);
   }
 
   function openInfo(location, marker) {
+    state.infoLocationId = location.id;
     state.info.setContent(`
       <div class="maimai-map-info">
         <strong>${escapeHtml(location.name)}</strong>
@@ -264,9 +312,22 @@
       window.open(googleMapsUrl(location), "_blank", "noopener");
       return;
     }
+    const markerIsVisible = marker.getMap?.() === state.map;
+    const shouldWaitForMapIdle = Boolean(
+      state.clusterer
+        && !markerIsVisible
+        && google.maps.event?.addListenerOnce,
+    );
+    if (shouldWaitForMapIdle) {
+      google.maps.event.addListenerOnce(state.map, "idle", () => {
+        if (state.filtered.some((item) => item.id === location.id)) {
+          openInfo(location, marker);
+        }
+      });
+    }
     state.map.panTo({ lat: location.lat, lng: location.lng });
     state.map.setZoom(15);
-    openInfo(location, marker);
+    if (!shouldWaitForMapIdle) openInfo(location, marker);
   }
 
   function bindEvents() {

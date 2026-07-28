@@ -293,7 +293,7 @@
     };
     window.__initMaimaiGoogleMap = initGoogleMaps;
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__initMaimaiGoogleMap`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__initMaimaiGoogleMap`;
     script.async = true;
     script.defer = true;
     script.onerror = function () {

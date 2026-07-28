@@ -1075,11 +1075,104 @@ body {
 .maimai-map-canvas {
   background: linear-gradient(145deg, #102235, #20344a);
   min-height: 42rem;
+  overflow: hidden;
   position: relative;
 }
 
-.maimai-map-canvas.is-loaded .maimai-map-placeholder {
+.maimai-map-provider {
+  height: 100%;
+  inset: 0;
+  min-height: inherit;
+  position: absolute;
+  width: 100%;
+}
+
+.maimai-map-provider[hidden] {
   display: none;
+}
+
+.maimai-google-map.is-loaded .maimai-map-placeholder {
+  display: none;
+}
+
+.maimai-china-map iframe {
+  background: #f2f3f5;
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.maimai-china-map iframe[hidden],
+.maimai-china-map-banner[hidden],
+.maimai-china-map-empty[hidden] {
+  display: none;
+}
+
+.maimai-china-map-empty {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(212, 106, 47, 0.2), transparent 34%),
+    linear-gradient(145deg, #102235, #20344a);
+}
+
+.maimai-china-map-banner {
+  align-items: center;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(37, 111, 156, 0.24);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(22, 34, 51, 0.14);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  left: 0.75rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.58rem 0.72rem;
+  pointer-events: none;
+  position: absolute;
+  top: 0.75rem;
+  z-index: 2;
+}
+
+.maimai-china-map-banner strong {
+  color: #c24f22;
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+}
+
+.maimai-china-map-banner span {
+  color: #34465a;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.maimai-china-map-banner a {
+  background: #c24f22;
+  border-radius: 999px;
+  color: #fff;
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  font-weight: 700;
+  margin-left: auto;
+  padding: 0.36rem 0.58rem;
+  pointer-events: auto;
+  text-decoration: none;
+}
+
+.maimai-china-map-banner a:hover {
+  background: #963b18;
+  color: #fff;
+}
+
+.maimai-china-map-banner.is-loading strong::after {
+  animation: maimai-map-pulse 1.2s steps(3, end) infinite;
+  content: "...";
+}
+
+@keyframes maimai-map-pulse {
+  0% { opacity: 0.35; }
+  50% { opacity: 1; }
+  100% { opacity: 0.35; }
 }
 
 .maimai-map-placeholder {
@@ -1136,6 +1229,12 @@ body {
   padding: 0.8rem;
 }
 
+.maimai-map-item.is-selected {
+  background: rgba(37, 111, 156, 0.1);
+  border-color: rgba(37, 111, 156, 0.62);
+  box-shadow: 0 0 0 2px rgba(37, 111, 156, 0.12);
+}
+
 .maimai-map-item span {
   color: var(--cf-accent);
   font-size: 0.76rem;
@@ -1143,10 +1242,33 @@ body {
   text-transform: uppercase;
 }
 
-.maimai-map-item strong {
+.maimai-map-item strong,
+.maimai-map-item button.maimai-map-item-name {
   color: var(--cf-ink);
   font-size: 0.96rem;
   line-height: 1.35;
+}
+
+.maimai-map-item button.maimai-map-item-name {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+.maimai-map-item button.maimai-map-item-name:hover {
+  background: transparent;
+  color: var(--cf-accent);
+}
+
+.maimai-map-item button.maimai-map-item-name:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--cf-accent);
+  outline-offset: 3px;
 }
 
 .maimai-map-item p {
@@ -1367,6 +1489,26 @@ body.dark .maimai-map-item {
   color: var(--cf-ink);
 }
 
+body.dark .maimai-map-item.is-selected {
+  background: rgba(140, 205, 242, 0.13);
+  border-color: rgba(140, 205, 242, 0.62);
+  box-shadow: 0 0 0 2px rgba(140, 205, 242, 0.1);
+}
+
+body.dark .maimai-china-map-banner {
+  background: rgba(16, 23, 34, 0.92);
+  border-color: rgba(140, 205, 242, 0.36);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34);
+}
+
+body.dark .maimai-china-map-banner strong {
+  color: #f0a078;
+}
+
+body.dark .maimai-china-map-banner span {
+  color: var(--cf-ink);
+}
+
 body.dark .network-icon li a:hover,
 body.dark .cf-quick-card:hover,
 body.dark .stream-item:hover {
@@ -1421,6 +1563,20 @@ body.dark .maimai-map-list-head a:hover,
 body.dark .maimai-map-exports a:hover {
   background: var(--cf-accent);
   color: #07111b;
+}
+
+body.dark .maimai-map-item button.maimai-map-item-name,
+body.dark .maimai-map-item button.maimai-map-item-name:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+body.dark .maimai-map-item button.maimai-map-item-name {
+  color: var(--cf-ink);
+}
+
+body.dark .maimai-map-item button.maimai-map-item-name:hover {
+  color: var(--cf-accent);
 }
 
 body.dark .anime-controls input,

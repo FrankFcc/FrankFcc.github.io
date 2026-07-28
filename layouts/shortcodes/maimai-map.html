@@ -24,6 +24,7 @@
         data-dataset="current"
         data-data-url="/data/maimai_locations.json"
         data-source-url="https://location.am-all.net/alm/location?gm=96"
+        data-provider="google"
         data-label="Japan + US"
         data-csv-url="/data/maimai_locations.csv"
         data-kml-url="/data/maimai_locations.kml"
@@ -36,6 +37,7 @@
         data-support-url="/data/maimai_china_province_centers.json"
         data-source-url="https://wc.wahlap.net/maidx/location/index.html"
         data-adapter="wahlap"
+        data-provider="amap"
         data-label="Mainland China"
       >Mainland China</button>
       <button
@@ -44,6 +46,7 @@
         data-dataset="worldwide"
         data-data-url="/data/maimai_locations_worldwide.json"
         data-source-url="https://location.am-all.net/alm/location?gm=98&amp;lang=en"
+        data-provider="google"
         data-label="Worldwide"
         data-csv-url="/data/maimai_locations_worldwide.csv"
         data-kml-url="/data/maimai_locations_worldwide.kml"
@@ -77,10 +80,31 @@
   </div>
 
   <div class="maimai-map-layout">
-    <div class="maimai-map-canvas" data-map role="region" aria-label="maimai Google Map">
-      <div class="maimai-map-placeholder">
-        <strong>Google Maps loading</strong>
-        <span>The official location list remains available if the map cannot load.</span>
+    <div class="maimai-map-canvas" data-map-shell role="region" aria-label="maimai Google Map">
+      <div class="maimai-map-provider maimai-google-map" data-map data-google-map>
+        <div class="maimai-map-placeholder">
+          <strong>Google Maps loading</strong>
+          <span>The official location list remains available if the map cannot load.</span>
+        </div>
+      </div>
+      <div class="maimai-map-provider maimai-china-map" data-china-map hidden aria-hidden="true">
+        <iframe
+          data-china-map-frame
+          title="Mainland China Gaode Map"
+          loading="lazy"
+          referrerpolicy="strict-origin-when-cross-origin"
+          sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+          hidden
+        ></iframe>
+        <div class="maimai-map-placeholder maimai-china-map-empty" data-china-map-empty>
+          <strong>Gaode Map is ready</strong>
+          <span>Select a store name on the right to open only that address search.</span>
+        </div>
+        <div class="maimai-china-map-banner" data-china-map-banner hidden>
+          <strong>Gaode Map</strong>
+          <span data-china-map-message>Select a store name on the right to open one Gaode address search.</span>
+          <a data-china-map-external href="https://ditu.amap.com/" target="_blank" rel="noopener">Open in Gaode</a>
+        </div>
       </div>
     </div>
     <aside class="maimai-map-list-panel">

@@ -12,6 +12,7 @@
       supportUrl: button.dataset.supportUrl || "",
       sourceUrl: button.dataset.sourceUrl || "",
       adapter: button.dataset.adapter || "json",
+      provider: button.dataset.provider || "google",
       csvUrl: button.dataset.csvUrl || "",
       kmlUrl: button.dataset.kmlUrl || "",
     },
@@ -26,7 +27,14 @@
     search: root.querySelector("[data-search]"),
     country: root.querySelector("[data-country]"),
     subregion: root.querySelector("[data-subregion]"),
+    mapShell: root.querySelector("[data-map-shell]"),
     map: root.querySelector("[data-map]"),
+    chinaMap: root.querySelector("[data-china-map]"),
+    chinaMapFrame: root.querySelector("[data-china-map-frame]"),
+    chinaMapEmpty: root.querySelector("[data-china-map-empty]"),
+    chinaMapBanner: root.querySelector("[data-china-map-banner]"),
+    chinaMapMessage: root.querySelector("[data-china-map-message]"),
+    chinaMapExternal: root.querySelector("[data-china-map-external]"),
     list: root.querySelector("[data-list]"),
     visibleCount: root.querySelector("[data-visible-count]"),
     openVisible: root.querySelector("[data-open-visible]"),
@@ -39,6 +47,7 @@
 
   const state = {
     datasetId: root.dataset.defaultDataset || datasetButtons[0]?.dataset.dataset || "current",
+    provider: "google",
     payload: null,
     payloadCache: new Map(),
     locations: [],
@@ -52,11 +61,23 @@
     infoLocationId: null,
     markers: new Map(),
     clusterer: null,
+    selectedLocationId: null,
+    chinaFrameLoading: false,
+    chinaSearchLoaded: false,
+    chinaRequestToken: 0,
+    chinaLoadTimer: null,
     apiReady: false,
     googleRequested: false,
     loadSequence: 0,
   };
 
+  const AMAP_CHINA_VIEWPORT = "73.5|18|135.1|53.6";
+  const AMAP_HOME_URL = `https://ditu.amap.com/search?${new URLSearchParams({
+    query: "中国",
+    city: "中国",
+    geoobj: AMAP_CHINA_VIEWPORT,
+    zoom: "4",
+  }).toString()}`;
   let searchTimer = null;
 
   function getApiKey() {
@@ -106,6 +127,27 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
 
+  function usesChinaMap() {
+    return state.provider === "amap";
+  }
+
+  function amapSearchUrl(location) {
+    if (!location) return AMAP_HOME_URL;
+    const params = new URLSearchParams({
+      query: `${location.name} ${location.address}`.trim(),
+      city: location.subregion || "中国",
+      // A viewport parameter makes Gaode execute the search on first load. The
+      // official address still determines the result and only one query is shown.
+      geoobj: AMAP_CHINA_VIEWPORT,
+      zoom: "4",
+    });
+    return `https://ditu.amap.com/search?${params.toString()}`;
+  }
+
+  function locationMapUrl(location) {
+    return usesChinaMap() ? amapSearchUrl(location) : googleMapsUrl(location);
+  }
+
   function locationAreaLabel(location) {
     return [location.country, location.subregion].filter(Boolean).join(" / ");
   }
@@ -133,7 +175,9 @@
     const areas = areaTotal(payload);
     els.total.textContent = `${total.toLocaleString()} locations`;
     if (payload.mapMode === "region-summary") {
-      els.mapped.textContent = `${payload.mapGroups.length.toLocaleString()} map groups`;
+      els.mapped.textContent = usesChinaMap()
+        ? "On-demand map"
+        : `${payload.mapGroups.length.toLocaleString()} map groups`;
       els.areas.textContent = `${areas.toLocaleString()} provinces`;
     } else {
       els.mapped.textContent = `${mapped.toLocaleString()} mapped`;
@@ -250,6 +294,13 @@
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     });
+    if (
+      state.selectedLocationId
+      && !state.filtered.some((location) => location.id === state.selectedLocationId)
+    ) {
+      state.selectedLocationId = null;
+      if (usesChinaMap()) resetChinaMap();
+    }
     state.mapItems = buildMapItems();
     renderList();
     renderMarkers();
@@ -259,21 +310,42 @@
   function renderList() {
     els.visibleCount.textContent = `${state.filtered.length.toLocaleString()} locations`;
     els.openVisible.href = state.filtered.length === 1
-      ? googleMapsUrl(state.filtered[0])
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`maimai ${state.payload?.label || ""}`)}`;
+      ? locationMapUrl(state.filtered[0])
+      : (
+        usesChinaMap()
+          ? AMAP_HOME_URL
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`maimai ${state.payload?.label || ""}`)}`
+      );
+    els.openVisible.textContent = usesChinaMap() ? "Open Gaode" : "Open search";
 
     const visibleItems = state.filtered.slice(0, 250);
-    els.list.innerHTML = visibleItems.map((location) => `
-      <article class="maimai-map-item" data-id="${escapeHtml(location.id)}">
+    els.list.innerHTML = visibleItems.map((location) => {
+      const selected = location.id === state.selectedLocationId;
+      const focusLabel = usesChinaMap()
+        ? "Show on Gaode"
+        : (hasCoordinates(location) ? "Focus" : "Search map");
+      const providerLabel = usesChinaMap() ? "Gaode Map" : "Google Maps";
+      return `
+      <article
+        class="maimai-map-item${selected ? " is-selected" : ""}"
+        data-id="${escapeHtml(location.id)}"
+        ${selected ? 'aria-current="true"' : ""}
+      >
         <span>${escapeHtml(locationAreaLabel(location))}</span>
-        <strong>${escapeHtml(location.name)}</strong>
+        <button
+          type="button"
+          class="maimai-map-item-name"
+          data-focus="${escapeHtml(location.id)}"
+          aria-label="Show ${escapeHtml(location.name)} on the map"
+        >${escapeHtml(location.name)}</button>
         <p>${escapeHtml(location.address)}</p>
         <div>
-          <button type="button" data-focus="${escapeHtml(location.id)}">${hasCoordinates(location) ? "Focus" : "Search map"}</button>
-          <a href="${googleMapsUrl(location)}" target="_blank" rel="noopener">Google Maps</a>
+          <button type="button" data-focus="${escapeHtml(location.id)}">${focusLabel}</button>
+          <a href="${locationMapUrl(location)}" target="_blank" rel="noopener">${providerLabel}</a>
         </div>
       </article>
-    `).join("");
+    `;
+    }).join("");
 
     if (state.filtered.length > visibleItems.length) {
       els.list.insertAdjacentHTML(
@@ -283,13 +355,148 @@
     }
   }
 
+  function markSelectedLocation(id) {
+    state.selectedLocationId = id;
+    els.list.querySelectorAll(".maimai-map-item[data-id]").forEach((item) => {
+      const selected = item.dataset.id === id;
+      item.classList.toggle("is-selected", selected);
+      if (selected) {
+        item.setAttribute("aria-current", "true");
+      } else {
+        item.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  function setChinaMapMessage(text, loading = false) {
+    if (!els.chinaMapMessage) return;
+    els.chinaMapBanner?.classList.toggle("is-loading", loading);
+    els.chinaMapMessage.textContent = text;
+  }
+
+  function clearChinaLoadTimer() {
+    if (state.chinaLoadTimer) {
+      window.clearTimeout(state.chinaLoadTimer);
+      state.chinaLoadTimer = null;
+    }
+  }
+
+  function resetChinaMap() {
+    if (!els.chinaMapFrame) return;
+    state.chinaRequestToken += 1;
+    clearChinaLoadTimer();
+    state.chinaFrameLoading = false;
+    state.chinaSearchLoaded = false;
+    els.chinaMapFrame.removeAttribute("src");
+    els.chinaMapFrame.hidden = true;
+    els.chinaMap?.classList.remove("is-active", "is-loaded");
+    if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = false;
+    if (els.chinaMapBanner) els.chinaMapBanner.hidden = true;
+    if (els.chinaMapExternal) els.chinaMapExternal.href = AMAP_HOME_URL;
+    setChinaMapMessage(
+      "Select a store name on the right to open one Gaode address search.",
+    );
+  }
+
+  function showMapProvider(provider) {
+    const showChina = provider === "amap";
+    els.map.hidden = showChina;
+    els.map.setAttribute("aria-hidden", String(showChina));
+    els.chinaMap.hidden = !showChina;
+    els.chinaMap.setAttribute("aria-hidden", String(!showChina));
+    els.mapShell.setAttribute(
+      "aria-label",
+      showChina ? "maimai Mainland China Gaode Map" : `${state.payload?.label || "maimai"} Google Map`,
+    );
+    if (!showChina) resetChinaMap();
+    if (!showChina && state.apiReady && window.google?.maps?.event) {
+      window.requestAnimationFrame(() => {
+        google.maps.event.trigger(state.map, "resize");
+        updateBounds();
+      });
+    }
+  }
+
+  function focusChinaLocation(location) {
+    if (!els.chinaMapFrame) {
+      window.open(amapSearchUrl(location), "_blank", "noopener");
+      return;
+    }
+    const url = amapSearchUrl(location);
+    const sameRequest = state.selectedLocationId === location.id
+      && els.chinaMapFrame.getAttribute("src") === url;
+    markSelectedLocation(location.id);
+    showMapProvider("amap");
+    if (sameRequest) {
+      updateMapStatus();
+      return;
+    }
+
+    const token = ++state.chinaRequestToken;
+    clearChinaLoadTimer();
+    state.chinaFrameLoading = true;
+    state.chinaSearchLoaded = false;
+    els.chinaMap.classList.add("is-active");
+    els.chinaMap.classList.remove("is-loaded");
+    if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = true;
+    if (els.chinaMapBanner) els.chinaMapBanner.hidden = false;
+    if (els.chinaMapExternal) els.chinaMapExternal.href = url;
+    setChinaMapMessage(`Opening a Gaode search for ${location.name}...`, true);
+
+    const previousFrame = els.chinaMapFrame;
+    const frame = previousFrame.cloneNode(false);
+    frame.hidden = false;
+    frame.removeAttribute("src");
+    frame.setAttribute("src", url);
+    frame.addEventListener("load", () => {
+      if (
+        token !== state.chinaRequestToken
+        || frame !== els.chinaMapFrame
+        || !usesChinaMap()
+        || state.selectedLocationId !== location.id
+      ) {
+        return;
+      }
+      clearChinaLoadTimer();
+      state.chinaFrameLoading = false;
+      state.chinaSearchLoaded = true;
+      els.chinaMap?.classList.add("is-loaded");
+      setChinaMapMessage(
+        `Gaode navigation finished for ${location.name}. Verify the address, or use “Open in Gaode” if the frame is blank.`,
+      );
+      updateMapStatus();
+    });
+    els.chinaMapFrame = frame;
+    previousFrame.replaceWith(frame);
+    state.chinaLoadTimer = window.setTimeout(() => {
+      if (
+        token !== state.chinaRequestToken
+        || frame !== els.chinaMapFrame
+        || !state.chinaFrameLoading
+      ) {
+        return;
+      }
+      setChinaMapMessage(
+        `Gaode is still loading ${location.name}. Use “Open in Gaode” if the frame stays blank.`,
+        true,
+      );
+      setStatus(
+        `Gaode is still loading the selected store search. No bulk markers were created; `
+        + "the external Gaode link remains available.",
+      );
+    }, 12000);
+    updateMapStatus();
+  }
+
   function loadGoogleMaps(key) {
     if (!key || window.google?.maps) {
       if (window.google?.maps) initGoogleMaps();
       return;
     }
     window.gm_authFailure = function () {
-      setStatus("Google Maps rejected the key. The official location list remains available.");
+      if (!usesChinaMap()) {
+        setStatus("Google Maps rejected the key. The official location list remains available.");
+      }
     };
     window.__initMaimaiGoogleMap = initGoogleMaps;
     const script = document.createElement("script");
@@ -297,7 +504,9 @@
     script.async = true;
     script.defer = true;
     script.onerror = function () {
-      setStatus("Google Maps could not be loaded. The official location list remains available.");
+      if (!usesChinaMap()) {
+        setStatus("Google Maps could not be loaded. The official location list remains available.");
+      }
     };
     document.head.appendChild(script);
   }
@@ -345,6 +554,34 @@
 
   function updateMapStatus() {
     if (!state.payload) return;
+    if (usesChinaMap()) {
+      const selected = state.locations.find(
+        (location) => location.id === state.selectedLocationId,
+      );
+      if (selected) {
+        if (state.chinaFrameLoading) {
+          setStatus(
+            `Opening one Gaode search for ${selected.name} from its official Wahlap address. `
+            + "No other store searches or bulk markers are loaded.",
+          );
+        } else if (state.chinaSearchLoaded) {
+          setStatus(
+            `Gaode frame navigation finished for ${selected.name}. Check the map against the `
+            + "official Wahlap address; use the external link if the frame is blank or incorrect.",
+          );
+        } else {
+          setStatus(
+            `Select ${selected.name} again to reopen its Gaode address search.`,
+          );
+        }
+      } else {
+        setStatus(
+          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          + "Select a store name to open one Gaode address search; no bulk markers are loaded.",
+        );
+      }
+      return;
+    }
     if (state.payload.mapMode === "region-summary") {
       setStatus(
         `${state.filtered.length.toLocaleString()} live official locations summarized into `
@@ -380,6 +617,7 @@
   function clearActiveMarkers() {
     if (state.info) state.info.close();
     state.infoLocationId = null;
+    state.selectedLocationId = null;
     if (state.clusterer) {
       state.clusterer.clearMarkers(true);
       state.clusterer.render();
@@ -388,7 +626,12 @@
   }
 
   function renderMarkers() {
-    if (!state.apiReady || !state.map || !state.payload) return;
+    if (!state.payload) return;
+    if (usesChinaMap()) {
+      updateMapStatus();
+      return;
+    }
+    if (!state.apiReady || !state.map) return;
 
     if (usesGroupedOverview()) {
       if (state.infoLocationId) {
@@ -462,6 +705,7 @@
 
   function openInfo(location, marker) {
     state.infoLocationId = location.id;
+    if (!location.aggregate) markSelectedLocation(location.id);
     if (location.aggregate) {
       state.info.setContent(`
         <div class="maimai-map-info">
@@ -484,7 +728,7 @@
   }
 
   function updateBounds() {
-    if (!state.apiReady || !state.map) return;
+    if (usesChinaMap() || !state.apiReady || !state.map) return;
     const bounds = new google.maps.LatLngBounds();
     const points = [];
     state.mapItems.forEach((location) => {
@@ -518,10 +762,15 @@
   function focusLocation(id) {
     const location = state.locations.find((item) => item.id === id);
     if (!location) return;
+    if (usesChinaMap()) {
+      focusChinaLocation(location);
+      return;
+    }
     if (!hasCoordinates(location)) {
       window.open(googleMapsUrl(location), "_blank", "noopener");
       return;
     }
+    markSelectedLocation(location.id);
     if (state.payload?.mapMode === "grouped-overview" && !state.country) {
       state.country = location.country;
       els.country.value = state.country;
@@ -641,7 +890,7 @@
         },
       ],
       notes: [
-        "Province markers are approximate summaries because the Wahlap feed provides store addresses but no coordinates.",
+        "Wahlap provides store addresses but no coordinates, so Gaode opens one store-address search only after a store is selected.",
       ],
       summary: {
         total: locations.length,
@@ -692,6 +941,9 @@
   }
 
   function resetActiveDataset(config) {
+    window.clearTimeout(searchTimer);
+    searchTimer = null;
+    state.provider = config.provider;
     clearActiveMarkers();
     state.payload = null;
     state.locations = [];
@@ -717,6 +969,7 @@
   }
 
   function activatePayload(payload, config) {
+    state.provider = config.provider;
     state.payload = payload;
     state.locations = payload.locations;
     state.filtered = [];
@@ -725,19 +978,26 @@
     state.query = "";
     state.subregion = "";
     els.datasetTitle.textContent = payload.label;
-    els.map.setAttribute("aria-label", `${payload.label} Google Map`);
+    showMapProvider(state.provider);
+    if (usesChinaMap()) {
+      resetChinaMap();
+    } else {
+      els.map.setAttribute("aria-label", `${payload.label} Google Map`);
+    }
     els.search.disabled = false;
     updateStats(payload);
     renderSource();
     populateCountries();
     populateSubregions();
     applyFilters();
-    if (!state.googleRequested) {
+    if (!usesChinaMap() && !state.googleRequested) {
       state.googleRequested = true;
       loadGoogleMaps(getApiKey());
     }
-    if (!state.apiReady) {
+    if (!usesChinaMap() && !state.apiReady) {
       setStatus(`${payload.summary.total.toLocaleString()} official locations loaded. Google Maps loading...`);
+    } else {
+      updateMapStatus();
     }
   }
 
@@ -748,7 +1008,7 @@
     if (state.payload && datasetId === state.datasetId) {
       setDatasetButtons(datasetId);
       root.setAttribute("aria-busy", "false");
-      if (state.apiReady) {
+      if (usesChinaMap() || state.apiReady) {
         updateMapStatus();
       } else {
         setStatus(

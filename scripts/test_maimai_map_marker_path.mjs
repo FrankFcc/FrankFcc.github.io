@@ -145,6 +145,10 @@ class FakeClassList {
     this.values.add(value);
   }
 
+  remove(...values) {
+    values.forEach((value) => this.values.delete(value));
+  }
+
   contains(value) {
     return this.values.has(value);
   }
@@ -188,6 +192,32 @@ class FakeElement {
     this.attributes[name] = String(value);
   }
 
+  getAttribute(name) {
+    return this.attributes[name] ?? null;
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  cloneNode() {
+    const clone = new FakeElement({
+      dataset: { ...this.dataset },
+      value: this.value,
+      textContent: this.textContent,
+    });
+    clone.attributes = { ...this.attributes };
+    clone.hidden = this.hidden;
+    this.classList.values.forEach((value) => clone.classList.add(value));
+    return clone;
+  }
+
+  replaceWith(replacement) {
+    Object.entries(elements).forEach(([selector, element]) => {
+      if (element === this) elements[selector] = replacement;
+    });
+  }
+
   querySelector(selector) {
     return this.elements?.[selector] ?? null;
   }
@@ -195,6 +225,40 @@ class FakeElement {
   querySelectorAll(selector) {
     if (selector === "[data-dataset]") return this.datasetButtons ?? [];
     return [];
+  }
+}
+
+class FakeListElement extends FakeElement {
+  constructor(options) {
+    super(options);
+    this.items = [];
+  }
+
+  set innerHTML(value) {
+    this._innerHTML = String(value);
+    this.items = [];
+    const articlePattern = /<article[\s\S]*?class="([^"]*maimai-map-item[^"]*)"[\s\S]*?data-id="([^"]+)"[\s\S]*?<\/article>/g;
+    for (const match of this._innerHTML.matchAll(articlePattern)) {
+      const item = new FakeElement({ dataset: { id: match[2] } });
+      match[1].split(/\s+/).filter(Boolean).forEach((name) => item.classList.add(name));
+      const focusMatch = match[0].match(
+        /class="maimai-map-item-name"[\s\S]*?data-focus="([^"]+)"/,
+      );
+      assert.ok(focusMatch, `missing clickable store name for ${match[2]}`);
+      const nameButton = new FakeElement({ dataset: { focus: focusMatch[1] } });
+      nameButton.closest = (selector) => (selector === "[data-focus]" ? nameButton : null);
+      item.nameButton = nameButton;
+      this.items.push(item);
+    }
+  }
+
+  get innerHTML() {
+    return this._innerHTML;
+  }
+
+  querySelectorAll(selector) {
+    if (selector === ".maimai-map-item[data-id]") return this.items;
+    return super.querySelectorAll(selector);
   }
 }
 
@@ -207,8 +271,15 @@ const elements = {
   "[data-search]": new FakeElement(),
   "[data-country]": new FakeElement(),
   "[data-subregion]": new FakeElement(),
+  "[data-map-shell]": new FakeElement(),
   "[data-map]": new FakeElement(),
-  "[data-list]": new FakeElement(),
+  "[data-china-map]": new FakeElement(),
+  "[data-china-map-frame]": new FakeElement(),
+  "[data-china-map-empty]": new FakeElement(),
+  "[data-china-map-banner]": new FakeElement(),
+  "[data-china-map-message]": new FakeElement(),
+  "[data-china-map-external]": new FakeElement(),
+  "[data-list]": new FakeListElement(),
   "[data-visible-count]": new FakeElement(),
   "[data-open-visible]": new FakeElement(),
   "[data-source]": new FakeElement(),
@@ -223,6 +294,7 @@ const datasetButtons = [
       dataset: "current",
       dataUrl: "/data/maimai_locations.json",
       label: "Japan + US",
+      provider: "google",
       csvUrl: "/data/maimai_locations.csv",
       kmlUrl: "/data/maimai_locations.kml",
     },
@@ -234,6 +306,7 @@ const datasetButtons = [
       dataUrl: "https://sega-register.wahlap.net/api/sega/maidx/rest/location",
       supportUrl: "/data/maimai_china_province_centers.json",
       adapter: "wahlap",
+      provider: "amap",
       label: "Mainland China",
     },
     textContent: "Mainland China",
@@ -242,6 +315,7 @@ const datasetButtons = [
     dataset: {
       dataset: "worldwide",
       dataUrl: "/data/maimai_locations_worldwide.json",
+      provider: "google",
       label: "Worldwide",
       csvUrl: "/data/maimai_locations_worldwide.csv",
       kmlUrl: "/data/maimai_locations_worldwide.kml",
@@ -360,6 +434,9 @@ const windowObject = {
   },
   clearTimeout,
   setTimeout,
+  requestAnimationFrame(callback) {
+    callback();
+  },
   markerClusterer: {
     MarkerClusterer: FakeMarkerClusterer,
     SuperClusterViewportAlgorithm: FakeSuperClusterViewportAlgorithm,
@@ -372,6 +449,10 @@ const windowObject = {
           assert.equal(eventName, "idle");
           idleListenerCount += 1;
           map.idleCallback = callback;
+        },
+        trigger(map, eventName) {
+          assert.equal(eventName, "resize");
+          map.resizeTriggered = true;
         },
       },
       Map: class {
@@ -610,42 +691,108 @@ datasetButtons[1].listeners.click();
 await settle();
 assert.equal(elements["[data-dataset-title]"].textContent, "舞萌DX Mainland China");
 assert.equal(elements["[data-stat-total]"].textContent, "3 locations");
-assert.equal(elements["[data-stat-mapped]"].textContent, "2 map groups");
+assert.equal(elements["[data-stat-mapped]"].textContent, "On-demand map");
 assert.equal(elements["[data-stat-areas]"].textContent, "2 provinces");
-assert.equal(clustererInstance.markers.length, 2);
+assert.equal(clustererInstance.markers.length, 0);
 assert.ok(elements["[data-status]"].textContent.includes("3 live official locations"));
-assert.ok(elements["[data-status]"].textContent.includes("2 province markers"));
+assert.ok(elements["[data-status]"].textContent.includes("no bulk markers are loaded"));
 assert.ok(elements["[data-list]"].innerHTML.includes("cn-wahlap-2081921990512345090"));
+assert.ok(elements["[data-list]"].innerHTML.includes("maimai-map-item-name"));
 assert.equal(elements["[data-exports]"].hidden, true);
+assert.equal(elements["[data-map]"].hidden, true);
+assert.equal(elements["[data-china-map]"].hidden, false);
+assert.equal(elements["[data-china-map-frame]"].getAttribute("src"), null);
+assert.equal(elements["[data-china-map-frame]"].hidden, true);
+assert.equal(elements["[data-china-map-empty]"].hidden, false);
+assert.equal(elements["[data-china-map-banner]"].hidden, true);
+assert.equal(elements["[data-open-visible]"].textContent, "Open Gaode");
 
-const henanSummaryMarker = clustererInstance.markers.find(
-  (marker) => marker.options.title === "河南: 2 locations",
-);
-assert.ok(henanSummaryMarker);
-henanSummaryMarker.clickCallback();
+elements["[data-subregion]"].value = chinaRawFixture[0].province;
+elements["[data-subregion]"].listeners.change();
 assert.equal(elements["[data-subregion]"].value, "河南");
 assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
-assert.equal(clustererInstance.markers.length, 1);
-assert.ok(elements["[data-status]"].textContent.includes("1 province markers"));
-assert.equal(mapInstance.zoom, 6);
+assert.equal(clustererInstance.markers.length, 0);
+assert.ok(elements["[data-status]"].textContent.includes("no bulk markers are loaded"));
 
 const openedBeforeChinaFocus = openedUrls.length;
+const chinaFirstItem = elements["[data-list]"].items.find(
+  (item) => item.dataset.id === "cn-wahlap-2081921990512345090",
+);
+assert.ok(chinaFirstItem);
 elements["[data-list]"].listeners.click({
-  target: {
-    closest() {
-      return { dataset: { focus: "cn-wahlap-2081921990512345090" } };
-    },
-  },
+  target: chinaFirstItem.nameButton,
 });
-assert.equal(openedUrls.length, openedBeforeChinaFocus + 1);
-assert.ok(openedUrls.at(-1).includes("google.com/maps/search"));
+assert.equal(openedUrls.length, openedBeforeChinaFocus);
+const focusedChinaUrl = new URL(elements["[data-china-map-frame]"].getAttribute("src"));
+assert.equal(focusedChinaUrl.origin, "https://ditu.amap.com");
+assert.equal(focusedChinaUrl.pathname, "/search");
+assert.ok(focusedChinaUrl.searchParams.get("query").includes(chinaRawFixture[0].arcadeName));
+assert.ok(focusedChinaUrl.searchParams.get("query").includes(chinaRawFixture[0].address));
+assert.equal(focusedChinaUrl.searchParams.get("city"), chinaRawFixture[0].province);
+assert.ok(elements["[data-status]"].textContent.startsWith("Opening one Gaode search"));
+assert.equal(elements["[data-china-map-frame]"].hidden, false);
+assert.equal(elements["[data-china-map-empty]"].hidden, true);
+assert.equal(elements["[data-china-map-banner]"].hidden, false);
+assert.equal(
+  elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
+  1,
+);
+const firstChinaFrame = elements["[data-china-map-frame]"];
+elements["[data-list]"].listeners.click({
+  target: chinaFirstItem.nameButton,
+});
+assert.equal(elements["[data-china-map-frame]"].getAttribute("src"), focusedChinaUrl.href);
+assert.equal(elements["[data-china-map-frame]"], firstChinaFrame);
+assert.ok(elements["[data-status]"].textContent.startsWith("Opening one Gaode search"));
+const chinaSecondItem = elements["[data-list]"].items.find(
+  (item) => item.dataset.id === "cn-wahlap-2072228503426945025",
+);
+assert.ok(chinaSecondItem);
+elements["[data-list]"].listeners.click({
+  target: chinaSecondItem.nameButton,
+});
+assert.notEqual(elements["[data-china-map-frame]"].getAttribute("src"), focusedChinaUrl.href);
+assert.equal(clustererInstance.markers.length, 0);
+assert.notEqual(elements["[data-china-map-frame]"], firstChinaFrame);
+firstChinaFrame.listeners.load();
+assert.ok(elements["[data-status]"].textContent.startsWith("Opening one Gaode search"));
+elements["[data-china-map-frame]"].listeners.load();
+assert.ok(elements["[data-status]"].textContent.startsWith("Gaode frame navigation finished"));
+assert.equal(
+  elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
+  1,
+);
+assert.equal(chinaFirstItem.classList.contains("is-selected"), false);
+assert.equal(chinaSecondItem.classList.contains("is-selected"), true);
+assert.equal(chinaFirstItem.attributes["aria-current"], undefined);
+assert.equal(chinaSecondItem.attributes["aria-current"], "true");
+elements["[data-list]"].listeners.click({ target: chinaFirstItem.nameButton });
+const lateChinaFrame = elements["[data-china-map-frame]"];
 
 datasetButtons[0].listeners.click();
 await settle();
 assert.equal(fetchCounts.get("/data/maimai_locations.json"), 1);
 assert.equal(clustererInstance.markers.length, currentMapped);
+assert.equal(elements["[data-map]"].hidden, false);
+assert.equal(elements["[data-china-map]"].hidden, true);
+const restoredGoogleStatus = elements["[data-status]"].textContent;
+lateChinaFrame.listeners.load();
+assert.equal(elements["[data-status]"].textContent, restoredGoogleStatus);
 assert.equal(elements["[data-exports]"].hidden, false);
 assert.equal(elements["[data-export-csv]"].href, "/data/maimai_locations.csv");
+
+datasetButtons[1].listeners.click();
+await settle();
+assert.equal(elements["[data-china-map-frame]"].getAttribute("src"), null);
+assert.equal(elements["[data-china-map-empty]"].hidden, false);
+datasetButtons[2].listeners.click();
+await settle();
+assert.equal(elements["[data-map]"].hidden, false);
+assert.equal(elements["[data-china-map]"].hidden, true);
+assert.equal(clustererInstance.markers.length, worldwidePayload.mapGroups.length);
+datasetButtons[0].listeners.click();
+await settle();
+assert.equal(clustererInstance.markers.length, currentMapped);
 
 const clusteredMarkerCount = markerCount;
 const markerCountBeforeFallback = markerCount;
@@ -672,7 +819,7 @@ console.log(
       worldwideOverviewMarkers: worldwidePayload.mapGroups.length,
       northAmericaMapped: mappedNorthAmerica,
       chinaLiveFixtureLocations: chinaRawFixture.length,
-      chinaProvinceMarkers: chinaSupportFixture.mapGroups.length,
+      chinaBulkMarkers: 0,
       inactiveSlowLoadIgnored: elements["[data-dataset-title]"].textContent
         !== "舞萌DX Mainland China",
       currentFetchesAfterReturn: fetchCounts.get("/data/maimai_locations.json"),

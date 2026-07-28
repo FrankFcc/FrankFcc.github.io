@@ -36,6 +36,7 @@
     chinaMapEmptyMessage: root.querySelector("[data-china-map-empty-message]"),
     chinaMapBanner: root.querySelector("[data-china-map-banner]"),
     chinaMapMessage: root.querySelector("[data-china-map-message]"),
+    chinaMapOverview: root.querySelector("[data-china-map-overview]"),
     chinaMapExternal: root.querySelector("[data-china-map-external]"),
     list: root.querySelector("[data-list]"),
     visibleCount: root.querySelector("[data-visible-count]"),
@@ -69,6 +70,8 @@
     baiduMarker: null,
     baiduInfo: null,
     baiduPoint: null,
+    baiduOverviewMarkers: new Map(),
+    baiduOverviewInfo: null,
     baiduReady: false,
     baiduRequested: false,
     baiduLoading: false,
@@ -188,7 +191,7 @@
     els.total.textContent = `${total.toLocaleString()} locations`;
     if (payload.mapMode === "region-summary") {
       els.mapped.textContent = usesChinaMap()
-        ? "On-demand map"
+        ? `${payload.mapGroups.length.toLocaleString()} province summaries`
         : `${payload.mapGroups.length.toLocaleString()} map groups`;
       els.areas.textContent = `${areas.toLocaleString()} provinces`;
     } else {
@@ -391,6 +394,19 @@
     if (els.chinaMapEmptyMessage) els.chinaMapEmptyMessage.textContent = message;
   }
 
+  function clearBaiduOverviewMarkers() {
+    if (state.baiduMapInstance) {
+      state.baiduOverviewMarkers.forEach(({ marker }) => {
+        state.baiduMapInstance.removeOverlay?.(marker);
+      });
+      if (state.baiduOverviewInfo && !state.baiduMarker) {
+        state.baiduMapInstance.closeInfoWindow?.();
+      }
+    }
+    state.baiduOverviewMarkers.clear();
+    state.baiduOverviewInfo = null;
+  }
+
   function clearBaiduMarker() {
     if (state.baiduMapInstance && state.baiduMarker) {
       state.baiduMapInstance.removeOverlay?.(state.baiduMarker);
@@ -419,16 +435,18 @@
   function resetChinaMap() {
     cancelBaiduGeocode();
     clearBaiduMarker();
+    clearBaiduOverviewMarkers();
     els.chinaMap?.classList.toggle("is-loaded", state.baiduReady);
     if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = state.baiduReady;
     if (els.chinaMapBanner) els.chinaMapBanner.hidden = true;
+    if (els.chinaMapOverview) els.chinaMapOverview.hidden = true;
     if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
-    setChinaMapMessage("Select a store name on the right to locate only that address.");
+    setChinaMapMessage("Select a province marker for an overview or a store name for one exact marker.");
 
     if (state.baiduReady) {
       setChinaEmpty(
         "Baidu Map is ready",
-        "Select a store name on the right to create one address-matched marker.",
+        "Province summary markers are shown until you select an exact store.",
       );
     } else if (state.baiduLoading) {
       setChinaEmpty("Baidu Map loading", "The official store list remains available while the map loads.");
@@ -567,10 +585,12 @@
       els.chinaMap?.classList.add("is-loaded");
       if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = true;
       if (usesChinaMap()) {
+        renderBaiduOverviewMarkers();
         const pending = state.locations.find(
           (location) => location.id === state.baiduPendingLocationId,
         );
         if (pending && state.selectedLocationId === pending.id) {
+          if (els.chinaMapOverview) els.chinaMapOverview.hidden = false;
           geocodeBaiduLocation(pending, state.baiduFocusToken);
         } else {
           updateMapStatus();
@@ -586,6 +606,108 @@
         updateMapStatus();
       }
     }
+  }
+
+  function styleBaiduOverviewLabel(marker, location, onSelect) {
+    if (
+      typeof BMap.Label !== "function"
+      || typeof BMap.Size !== "function"
+      || typeof marker.setLabel !== "function"
+    ) return;
+    const label = new BMap.Label(String(location.count), {
+      offset: new BMap.Size(17, -9),
+    });
+    label.setStyle?.({
+      backgroundColor: "#c24f22",
+      border: "2px solid #ffffff",
+      borderRadius: "999px",
+      boxShadow: "0 2px 7px rgba(0, 0, 0, 0.28)",
+      color: "#ffffff",
+      cursor: "pointer",
+      fontSize: "11px",
+      fontWeight: "700",
+      lineHeight: "16px",
+      padding: "1px 6px",
+      whiteSpace: "nowrap",
+    });
+    label.addEventListener?.("click", onSelect);
+    marker.setLabel(label);
+  }
+
+  function selectBaiduProvince(location) {
+    cancelBaiduGeocode();
+    clearBaiduMarker();
+    markSelectedLocation(null);
+    state.subregion = location.key;
+    els.subregion.value = state.subregion;
+    applyFilters();
+
+    const overview = state.baiduOverviewMarkers.get(location.key);
+    if (!overview) return;
+    state.baiduMapInstance.centerAndZoom(overview.point, 7);
+    const info = new BMap.InfoWindow(`
+      <div class="maimai-map-info">
+        <strong>${escapeHtml(overview.location.name)}</strong>
+        <span>${overview.location.count.toLocaleString()} official locations</span>
+        <p>Approximate province-center overview. Select a store from the list for its address-matched marker.</p>
+      </div>
+    `, { width: 280 });
+    state.baiduOverviewInfo = info;
+    state.baiduMapInstance.openInfoWindow(info, overview.point);
+    setChinaMapMessage(
+      `Showing the ${overview.location.name} province overview with ${overview.location.count.toLocaleString()} official locations.`,
+    );
+  }
+
+  function renderBaiduOverviewMarkers() {
+    if (
+      !usesChinaMap()
+      || !state.baiduReady
+      || !state.baiduMapInstance
+      || state.payload?.mapMode !== "region-summary"
+      || state.selectedLocationId
+    ) return;
+
+    clearBaiduOverviewMarkers();
+    const overviewItems = state.mapItems.filter(
+      (location) => location.aggregate && hasCoordinates(location),
+    );
+    const points = [];
+    overviewItems.forEach((location) => {
+      const point = new BMap.Point(location.lng, location.lat);
+      const marker = new BMap.Marker(point, {
+        title: `${location.name}: ${location.count.toLocaleString()} locations`,
+      });
+      const onSelect = () => selectBaiduProvince(location);
+      marker.addEventListener?.("click", onSelect);
+      styleBaiduOverviewLabel(marker, location, onSelect);
+      state.baiduMapInstance.addOverlay(marker);
+      state.baiduOverviewMarkers.set(location.key, { location, marker, point });
+      points.push(point);
+    });
+
+    if (points.length === 1) {
+      state.baiduMapInstance.centerAndZoom(points[0], 7);
+    } else if (points.length > 1 && state.baiduMapInstance.setViewport) {
+      state.baiduMapInstance.setViewport(points, { margins: [48, 48, 48, 48] });
+    } else if (points.length > 1) {
+      state.baiduMapInstance.centerAndZoom(new BMap.Point(104.2, 35.9), 5);
+    }
+  }
+
+  function showChinaProvinceOverview() {
+    if (!usesChinaMap()) return;
+    cancelBaiduGeocode();
+    clearBaiduMarker();
+    markSelectedLocation(null);
+    state.query = "";
+    state.subregion = "";
+    els.search.value = "";
+    els.subregion.value = "";
+    if (els.chinaMapBanner) els.chinaMapBanner.hidden = true;
+    if (els.chinaMapOverview) els.chinaMapOverview.hidden = true;
+    if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
+    applyFilters();
   }
 
   function geocodeBaiduLocation(location, token) {
@@ -683,8 +805,10 @@
     const sameSelection = state.selectedLocationId === location.id;
     markSelectedLocation(location.id);
     showMapProvider("baidu");
+    clearBaiduOverviewMarkers();
     if (els.chinaMapExternal) els.chinaMapExternal.href = url;
     if (els.chinaMapBanner) els.chinaMapBanner.hidden = false;
+    if (els.chinaMapOverview) els.chinaMapOverview.hidden = !state.baiduReady;
 
     if (!getBaiduApiKey() || state.baiduLoadFailed) {
       setChinaMapMessage(
@@ -786,7 +910,7 @@
       if (state.baiduLoading || (!state.baiduReady && !state.baiduLoadFailed)) {
         setStatus(
           `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
-          + "Baidu Map is loading; no bulk markers are loaded.",
+          + "Baidu Map is loading; the province overview will appear when ready.",
         );
         return;
       }
@@ -809,7 +933,7 @@
         } else if (state.baiduFocusedLocationId === selected.id && state.baiduMarker) {
           setStatus(
             `Showing one Baidu marker for ${selected.name}, matched from its official Wahlap address. `
-            + "No other store markers are loaded.",
+            + "No other store markers are loaded; use Province overview to return.",
           );
         } else {
           setStatus(
@@ -817,9 +941,12 @@
           );
         }
       } else {
+        const overviewCount = state.mapItems.length;
+        const markerLabel = overviewCount === 1 ? "marker" : "markers";
         setStatus(
-          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
-          + "Select a store name to create one Baidu address-matched marker; no bulk markers are loaded.",
+          `${state.filtered.length.toLocaleString()} live official locations summarized into `
+          + `${overviewCount.toLocaleString()} province overview ${markerLabel}. `
+          + "Select a province marker to filter the list, or select a store for one address-matched marker.",
         );
       }
       return;
@@ -871,6 +998,7 @@
   function renderMarkers() {
     if (!state.payload) return;
     if (usesChinaMap()) {
+      renderBaiduOverviewMarkers();
       updateMapStatus();
       return;
     }
@@ -1133,7 +1261,7 @@
         },
       ],
       notes: [
-        "Wahlap provides store addresses but no coordinates, so Baidu geocodes only the selected store and displays one temporary marker.",
+        "Baidu shows lightweight province-center summaries; Wahlap provides no store coordinates, so only the selected store is geocoded into one temporary exact marker.",
       ],
       summary: {
         total: locations.length,
@@ -1320,6 +1448,7 @@
       if (!button) return;
       focusLocation(button.dataset.focus);
     });
+    els.chinaMapOverview?.addEventListener("click", showChinaProvinceOverview);
   }
 
   bindEvents();

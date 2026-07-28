@@ -1144,20 +1144,34 @@ body {
   line-height: 1.35;
 }
 
-.maimai-china-map-banner a {
+.maimai-china-map-banner a,
+.maimai-china-map-banner button {
   background: #c24f22;
+  border: 0;
   border-radius: 999px;
   color: #fff;
   flex: 0 0 auto;
   font-size: 0.76rem;
   font-weight: 700;
-  margin-left: auto;
   padding: 0.36rem 0.58rem;
   pointer-events: auto;
   text-decoration: none;
 }
 
-.maimai-china-map-banner a:hover {
+.maimai-china-map-banner button {
+  cursor: pointer;
+}
+
+.maimai-china-map-banner a {
+  margin-left: auto;
+}
+
+.maimai-china-map-banner button[hidden] {
+  display: none;
+}
+
+.maimai-china-map-banner a:hover,
+.maimai-china-map-banner button:hover {
   background: #963b18;
   color: #fff;
 }

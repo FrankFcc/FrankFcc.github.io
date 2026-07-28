@@ -21,6 +21,7 @@ const vendorSource = fs.readFileSync(
 
 assert.match(shortcodeSource, /data-provider="baidu"/);
 assert.match(shortcodeSource, /data-baidu-map/);
+assert.match(shortcodeSource, /data-china-map-overview/);
 assert.match(shortcodeSource, /HUGO_MAIMAI_BAIDU_MAPS_AK/);
 assert.doesNotMatch(shortcodeSource, /data-china-map-frame|Mainland China Gaode Map/);
 assert.match(
@@ -295,6 +296,7 @@ const elements = {
   "[data-china-map-empty-message]": new FakeElement(),
   "[data-china-map-banner]": new FakeElement(),
   "[data-china-map-message]": new FakeElement(),
+  "[data-china-map-overview]": new FakeElement(),
   "[data-china-map-external]": new FakeElement(),
   "[data-list]": new FakeListElement(),
   "[data-visible-count]": new FakeElement(),
@@ -417,6 +419,8 @@ const baiduGeocodeCalls = [];
 let baiduMapInstance = null;
 let baiduMapCount = 0;
 let baiduMarkerCount = 0;
+let baiduOverviewMarkerCount = 0;
+let baiduExactMarkerCount = 0;
 let baiduInfoWindowInstance = null;
 let managedTimerSequence = 0;
 const managedLongTimers = new Map();
@@ -480,6 +484,11 @@ class FakeBaiduMap {
     this.checkResizeCalls += 1;
   }
 
+  setViewport(points, options) {
+    this.viewportPoints = [...points];
+    this.viewportOptions = options;
+  }
+
   clearOverlays() {
     this.overlays = [];
     this.clearOverlaysCalls += 1;
@@ -515,18 +524,56 @@ class FakeBaiduGeocoder {
 }
 
 class FakeBaiduMarker {
-  constructor(point) {
+  constructor(point, options = {}) {
     baiduMarkerCount += 1;
     this.point = point;
+    this.options = options;
     this.listeners = {};
+    this.isOverview = /:\s[\d,]+\slocations$/.test(options.title || "");
+    if (this.isOverview) {
+      baiduOverviewMarkerCount += 1;
+    } else {
+      baiduExactMarkerCount += 1;
+    }
   }
 
   addEventListener(type, callback) {
     this.listeners[type] = callback;
   }
 
+  setLabel(label) {
+    this.label = label;
+  }
+
+  getPosition() {
+    return this.point;
+  }
+
   openInfoWindow(infoWindow) {
     this.infoWindow = infoWindow;
+  }
+}
+
+class FakeBaiduLabel {
+  constructor(content, options) {
+    this.content = content;
+    this.options = options;
+    this.listeners = {};
+  }
+
+  setStyle(style) {
+    this.style = style;
+  }
+
+  addEventListener(type, callback) {
+    this.listeners[type] = callback;
+  }
+}
+
+class FakeBaiduSize {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
   }
 }
 
@@ -543,6 +590,8 @@ const fakeBMap = {
   Point: FakeBaiduPoint,
   Geocoder: FakeBaiduGeocoder,
   Marker: FakeBaiduMarker,
+  Label: FakeBaiduLabel,
+  Size: FakeBaiduSize,
   InfoWindow: FakeBaiduInfoWindow,
 };
 
@@ -849,11 +898,11 @@ datasetButtons[1].listeners.click();
 await settle();
 assert.equal(elements["[data-dataset-title]"].textContent, "舞萌DX Mainland China");
 assert.equal(elements["[data-stat-total]"].textContent, "3 locations");
-assert.equal(elements["[data-stat-mapped]"].textContent, "On-demand map");
+assert.equal(elements["[data-stat-mapped]"].textContent, "2 province summaries");
 assert.equal(elements["[data-stat-areas]"].textContent, "2 provinces");
 assert.equal(clustererInstance.markers.length, 0);
 assert.ok(elements["[data-status]"].textContent.includes("3 live official locations"));
-assert.ok(elements["[data-status]"].textContent.includes("no bulk markers are loaded"));
+assert.match(elements["[data-status]"].textContent, /province overview/i);
 assert.ok(elements["[data-list]"].innerHTML.includes("cn-wahlap-2081921990512345090"));
 assert.ok(elements["[data-list]"].innerHTML.includes("maimai-map-item-name"));
 assert.equal(elements["[data-exports]"].hidden, true);
@@ -917,15 +966,36 @@ assert.equal(baiduMapCount, 1);
 assert.equal(managedLongTimers.size, 0);
 assert.equal(baiduMapInstance.element, elements["[data-baidu-map]"]);
 assert.equal(baiduMapInstance.scrollWheelEnabled, true);
-assert.equal(baiduMapInstance.overlays.length, 0);
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.equal(baiduMapInstance.viewportPoints.length, chinaSupportFixture.mapGroups.length);
+assert.deepEqual(
+  baiduMapInstance.overlays.map((marker) => marker.options.title).sort(),
+  chinaSupportFixture.mapGroups
+    .map((group) => {
+      const count = chinaRawFixture.filter((location) => location.province === group.key).length;
+      return `${group.name}: ${count} locations`;
+    })
+    .sort(),
+);
+assert.ok(baiduMapInstance.overlays.every((marker) => marker.label));
+assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(elements["[data-open-visible]"].textContent, "Open Baidu");
 
-elements["[data-subregion]"].value = chinaRawFixture[0].province;
-elements["[data-subregion]"].listeners.change();
+const firstProvinceOverviewMarker = baiduMapInstance.overlays.find(
+  (marker) => marker.options.title.startsWith(`${chinaRawFixture[0].province}:`),
+);
+assert.ok(firstProvinceOverviewMarker);
+const geocodesBeforeProvinceSelection = baiduGeocodeCalls.length;
+firstProvinceOverviewMarker.listeners.click();
 assert.equal(elements["[data-subregion]"].value, "河南");
 assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeProvinceSelection);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, true);
+assert.equal(baiduMapInstance.zoom, 7);
+assert.ok(baiduMapInstance.infoWindow.content.includes(chinaRawFixture[0].province));
 assert.equal(clustererInstance.markers.length, 0);
-assert.ok(elements["[data-status]"].textContent.includes("no bulk markers are loaded"));
+assert.match(elements["[data-status]"].textContent, /1 province overview marker/i);
 
 const openedBeforeChinaFocus = openedUrls.length;
 const chinaFirstItem = elements["[data-list]"].items.find(
@@ -940,6 +1010,7 @@ assert.equal(baiduGeocodeCalls.length, 1);
 assert.equal(baiduGeocodeCalls[0].address, chinaRawFixture[0].address);
 assert.equal(baiduGeocodeCalls[0].city, chinaRawFixture[0].province);
 assert.equal(baiduMapInstance.overlays.length, 0);
+assert.equal(elements["[data-china-map-overview]"].hidden, false);
 assert.equal(
   elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
   1,
@@ -970,8 +1041,9 @@ assert.notEqual(baiduMapInstance.center, staleChinaPoint);
 const selectedChinaPoint = new FakeBaiduPoint(113.6254, 34.7466);
 baiduGeocodeCalls[1].callback(selectedChinaPoint);
 assert.equal(managedLongTimers.size, 0);
-assert.equal(baiduMarkerCount, 1);
+assert.equal(baiduExactMarkerCount, 1);
 assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, false);
 assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
 assert.equal(baiduMapInstance.center, selectedChinaPoint);
 assert.ok(baiduMapInstance.zoom >= 15);
@@ -1005,6 +1077,13 @@ baiduGeocodeCalls[2].callback(new FakeBaiduPoint(114.2, 34.8));
 assert.equal(elements["[data-status]"].textContent, timedOutChinaStatus);
 assert.equal(baiduMapInstance.overlays.length, 0);
 
+elements["[data-china-map-overview]"].listeners.click();
+assert.equal(elements["[data-subregion]"].value, "");
+assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => marker.isOverview));
+assert.equal(elements["[data-china-map-overview]"].hidden, true);
+
 elements["[data-list]"].listeners.click({ target: chinaFirstItem.nameButton });
 assert.equal(baiduGeocodeCalls.length, 4);
 assert.equal(managedLongTimers.size, 1);
@@ -1032,7 +1111,8 @@ assert.equal(appendedScripts.length, 3);
 assert.equal(baiduMapCount, 1);
 assert.equal(elements["[data-china-map]"].hidden, false);
 assert.ok(baiduMapInstance.checkResizeCalls > baiduResizeCallsBeforeReturn);
-assert.equal(baiduMapInstance.overlays.length, 0);
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => marker.isOverview));
 assert.equal(
   elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
   0,
@@ -1100,6 +1180,7 @@ const missingKeyElements = {
   "[data-china-map-empty-message]": new FakeElement(),
   "[data-china-map-banner]": new FakeElement(),
   "[data-china-map-message]": new FakeElement(),
+  "[data-china-map-overview]": new FakeElement(),
   "[data-china-map-external]": new FakeElement(),
   "[data-list]": new FakeListElement(),
   "[data-visible-count]": new FakeElement(),
@@ -1222,10 +1303,12 @@ console.log(
       worldwideOverviewMarkers: worldwidePayload.mapGroups.length,
       northAmericaMapped: mappedNorthAmerica,
       chinaLiveFixtureLocations: chinaRawFixture.length,
-      chinaBulkMarkers: 0,
+      chinaBulkStoreMarkers: 0,
+      chinaProvinceOverviewGroups: chinaSupportFixture.mapGroups.length,
       baiduScriptsLoaded: appendedScripts.length,
       baiduGeocodeCalls: baiduGeocodeCalls.length,
-      baiduMarkersCreated: baiduMarkerCount,
+      baiduOverviewMarkersCreated: baiduOverviewMarkerCount,
+      baiduExactMarkersCreated: baiduExactMarkerCount,
       baiduActiveOverlays: baiduMapInstance.overlays.length,
       missingBaiduKeyScripts: missingKeyScripts.length,
       inactiveSlowLoadIgnored: elements["[data-dataset-title]"].textContent

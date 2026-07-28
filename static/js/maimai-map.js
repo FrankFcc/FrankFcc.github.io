@@ -30,8 +30,10 @@
     mapShell: root.querySelector("[data-map-shell]"),
     map: root.querySelector("[data-map]"),
     chinaMap: root.querySelector("[data-china-map]"),
-    chinaMapFrame: root.querySelector("[data-china-map-frame]"),
+    baiduMap: root.querySelector("[data-baidu-map]"),
     chinaMapEmpty: root.querySelector("[data-china-map-empty]"),
+    chinaMapEmptyTitle: root.querySelector("[data-china-map-empty-title]"),
+    chinaMapEmptyMessage: root.querySelector("[data-china-map-empty-message]"),
     chinaMapBanner: root.querySelector("[data-china-map-banner]"),
     chinaMapMessage: root.querySelector("[data-china-map-message]"),
     chinaMapExternal: root.querySelector("[data-china-map-external]"),
@@ -62,22 +64,31 @@
     markers: new Map(),
     clusterer: null,
     selectedLocationId: null,
-    chinaFrameLoading: false,
-    chinaSearchLoaded: false,
-    chinaRequestToken: 0,
-    chinaLoadTimer: null,
+    baiduMapInstance: null,
+    baiduGeocoder: null,
+    baiduMarker: null,
+    baiduInfo: null,
+    baiduPoint: null,
+    baiduReady: false,
+    baiduRequested: false,
+    baiduLoading: false,
+    baiduLoadFailed: false,
+    baiduLoadAttempt: 0,
+    baiduLoadTimer: null,
+    baiduScript: null,
+    baiduGeocoding: false,
+    baiduGeocodeTimer: null,
+    baiduFocusToken: 0,
+    baiduPendingLocationId: null,
+    baiduFocusedLocationId: null,
     apiReady: false,
     googleRequested: false,
     loadSequence: 0,
+    loadingDatasetId: null,
   };
 
-  const AMAP_CHINA_VIEWPORT = "73.5|18|135.1|53.6";
-  const AMAP_HOME_URL = `https://ditu.amap.com/search?${new URLSearchParams({
-    query: "中国",
-    city: "中国",
-    geoobj: AMAP_CHINA_VIEWPORT,
-    zoom: "4",
-  }).toString()}`;
+  const BAIDU_HOME_URL = "https://map.baidu.com/";
+  const BAIDU_URI_SOURCE = "webapp.frankfcc.maimai";
   let searchTimer = null;
 
   function getApiKey() {
@@ -89,6 +100,10 @@
     }
     if (root.dataset.googleMapsKey) return root.dataset.googleMapsKey.trim();
     return localStorage.getItem("maimaiGoogleMapsKey") || "";
+  }
+
+  function getBaiduApiKey() {
+    return root.dataset.baiduMapsAk?.trim() || "";
   }
 
   function setStatus(text) {
@@ -128,24 +143,21 @@
   }
 
   function usesChinaMap() {
-    return state.provider === "amap";
+    return state.provider === "baidu";
   }
 
-  function amapSearchUrl(location) {
-    if (!location) return AMAP_HOME_URL;
+  function baiduSearchUrl(location) {
+    if (!location) return BAIDU_HOME_URL;
     const params = new URLSearchParams({
-      query: `${location.name} ${location.address}`.trim(),
-      city: location.subregion || "中国",
-      // A viewport parameter makes Gaode execute the search on first load. The
-      // official address still determines the result and only one query is shown.
-      geoobj: AMAP_CHINA_VIEWPORT,
-      zoom: "4",
+      address: location.address,
+      output: "html",
+      src: BAIDU_URI_SOURCE,
     });
-    return `https://ditu.amap.com/search?${params.toString()}`;
+    return `https://api.map.baidu.com/geocoder?${params.toString()}`;
   }
 
   function locationMapUrl(location) {
-    return usesChinaMap() ? amapSearchUrl(location) : googleMapsUrl(location);
+    return usesChinaMap() ? baiduSearchUrl(location) : googleMapsUrl(location);
   }
 
   function locationAreaLabel(location) {
@@ -313,18 +325,18 @@
       ? locationMapUrl(state.filtered[0])
       : (
         usesChinaMap()
-          ? AMAP_HOME_URL
+          ? BAIDU_HOME_URL
           : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`maimai ${state.payload?.label || ""}`)}`
       );
-    els.openVisible.textContent = usesChinaMap() ? "Open Gaode" : "Open search";
+    els.openVisible.textContent = usesChinaMap() ? "Open Baidu" : "Open search";
 
     const visibleItems = state.filtered.slice(0, 250);
     els.list.innerHTML = visibleItems.map((location) => {
       const selected = location.id === state.selectedLocationId;
       const focusLabel = usesChinaMap()
-        ? "Show on Gaode"
+        ? "Show on Baidu"
         : (hasCoordinates(location) ? "Focus" : "Search map");
-      const providerLabel = usesChinaMap() ? "Gaode Map" : "Google Maps";
+      const providerLabel = usesChinaMap() ? "Baidu Map" : "Google Maps";
       return `
       <article
         class="maimai-map-item${selected ? " is-selected" : ""}"
@@ -374,41 +386,85 @@
     els.chinaMapMessage.textContent = text;
   }
 
-  function clearChinaLoadTimer() {
-    if (state.chinaLoadTimer) {
-      window.clearTimeout(state.chinaLoadTimer);
-      state.chinaLoadTimer = null;
+  function setChinaEmpty(title, message) {
+    if (els.chinaMapEmptyTitle) els.chinaMapEmptyTitle.textContent = title;
+    if (els.chinaMapEmptyMessage) els.chinaMapEmptyMessage.textContent = message;
+  }
+
+  function clearBaiduMarker() {
+    if (state.baiduMapInstance && state.baiduMarker) {
+      state.baiduMapInstance.removeOverlay?.(state.baiduMarker);
+    }
+    state.baiduMapInstance?.closeInfoWindow?.();
+    state.baiduMarker = null;
+    state.baiduInfo = null;
+    state.baiduPoint = null;
+    state.baiduFocusedLocationId = null;
+  }
+
+  function clearBaiduGeocodeTimer() {
+    if (state.baiduGeocodeTimer) {
+      window.clearTimeout(state.baiduGeocodeTimer);
+      state.baiduGeocodeTimer = null;
     }
   }
 
+  function cancelBaiduGeocode() {
+    state.baiduFocusToken += 1;
+    clearBaiduGeocodeTimer();
+    state.baiduGeocoding = false;
+    state.baiduPendingLocationId = null;
+  }
+
   function resetChinaMap() {
-    if (!els.chinaMapFrame) return;
-    state.chinaRequestToken += 1;
-    clearChinaLoadTimer();
-    state.chinaFrameLoading = false;
-    state.chinaSearchLoaded = false;
-    els.chinaMapFrame.removeAttribute("src");
-    els.chinaMapFrame.hidden = true;
-    els.chinaMap?.classList.remove("is-active", "is-loaded");
-    if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = false;
+    cancelBaiduGeocode();
+    clearBaiduMarker();
+    els.chinaMap?.classList.toggle("is-loaded", state.baiduReady);
+    if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = state.baiduReady;
     if (els.chinaMapBanner) els.chinaMapBanner.hidden = true;
-    if (els.chinaMapExternal) els.chinaMapExternal.href = AMAP_HOME_URL;
-    setChinaMapMessage(
-      "Select a store name on the right to open one Gaode address search.",
-    );
+    if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
+    setChinaMapMessage("Select a store name on the right to locate only that address.");
+
+    if (state.baiduReady) {
+      setChinaEmpty(
+        "Baidu Map is ready",
+        "Select a store name on the right to create one address-matched marker.",
+      );
+    } else if (state.baiduLoading) {
+      setChinaEmpty("Baidu Map loading", "The official store list remains available while the map loads.");
+    } else if (state.baiduLoadFailed) {
+      setChinaEmpty(
+        "Baidu Map could not load",
+        "Use a store's external Baidu link while the map service is unavailable.",
+      );
+    } else if (!getBaiduApiKey()) {
+      setChinaEmpty(
+        "Baidu Browser AK required",
+        "Add the domain-restricted Baidu Browser AK to enable the interactive China map.",
+      );
+    } else {
+      setChinaEmpty("Baidu Map is ready", "The map will load only when Mainland China is selected.");
+    }
   }
 
   function showMapProvider(provider) {
-    const showChina = provider === "amap";
+    const showChina = provider === "baidu";
     els.map.hidden = showChina;
     els.map.setAttribute("aria-hidden", String(showChina));
     els.chinaMap.hidden = !showChina;
     els.chinaMap.setAttribute("aria-hidden", String(!showChina));
     els.mapShell.setAttribute(
       "aria-label",
-      showChina ? "maimai Mainland China Gaode Map" : `${state.payload?.label || "maimai"} Google Map`,
+      showChina ? "maimai Mainland China Baidu Map" : `${state.payload?.label || "maimai"} Google Map`,
     );
-    if (!showChina) resetChinaMap();
+    if (showChina) {
+      loadBaiduMaps(getBaiduApiKey());
+      if (state.baiduReady) {
+        window.requestAnimationFrame(() => state.baiduMapInstance?.checkResize?.());
+      }
+    } else {
+      resetChinaMap();
+    }
     if (!showChina && state.apiReady && window.google?.maps?.event) {
       window.requestAnimationFrame(() => {
         google.maps.event.trigger(state.map, "resize");
@@ -417,75 +473,243 @@
     }
   }
 
-  function focusChinaLocation(location) {
-    if (!els.chinaMapFrame) {
-      window.open(amapSearchUrl(location), "_blank", "noopener");
-      return;
+  function clearBaiduLoadTimer() {
+    if (state.baiduLoadTimer) {
+      window.clearTimeout(state.baiduLoadTimer);
+      state.baiduLoadTimer = null;
     }
-    const url = amapSearchUrl(location);
-    const sameRequest = state.selectedLocationId === location.id
-      && els.chinaMapFrame.getAttribute("src") === url;
-    markSelectedLocation(location.id);
-    showMapProvider("amap");
-    if (sameRequest) {
+  }
+
+  function failBaiduLoad(script, callbackName) {
+    if (state.baiduReady || state.baiduScript !== script) return;
+    clearBaiduLoadTimer();
+    state.baiduScript = null;
+    state.baiduRequested = false;
+    state.baiduLoading = false;
+    state.baiduLoadFailed = true;
+    script.remove?.();
+    try {
+      delete window[callbackName];
+    } catch (error) {
+      window[callbackName] = undefined;
+    }
+    if (usesChinaMap()) {
+      resetChinaMap();
       updateMapStatus();
+    }
+  }
+
+  function loadBaiduMaps(key) {
+    if (state.baiduReady || window.BMap?.Map) {
+      if (!state.baiduReady) initBaiduMaps();
       return;
     }
-
-    const token = ++state.chinaRequestToken;
-    clearChinaLoadTimer();
-    state.chinaFrameLoading = true;
-    state.chinaSearchLoaded = false;
-    els.chinaMap.classList.add("is-active");
-    els.chinaMap.classList.remove("is-loaded");
-    if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = true;
-    if (els.chinaMapBanner) els.chinaMapBanner.hidden = false;
-    if (els.chinaMapExternal) els.chinaMapExternal.href = url;
-    setChinaMapMessage(`Opening a Gaode search for ${location.name}...`, true);
-
-    const previousFrame = els.chinaMapFrame;
-    const frame = previousFrame.cloneNode(false);
-    frame.hidden = false;
-    frame.removeAttribute("src");
-    frame.setAttribute("src", url);
-    frame.addEventListener("load", () => {
-      if (
-        token !== state.chinaRequestToken
-        || frame !== els.chinaMapFrame
-        || !usesChinaMap()
-        || state.selectedLocationId !== location.id
-      ) {
-        return;
+    if (!key) {
+      if (usesChinaMap()) {
+        resetChinaMap();
+        updateMapStatus();
       }
-      clearChinaLoadTimer();
-      state.chinaFrameLoading = false;
-      state.chinaSearchLoaded = true;
+      return;
+    }
+    if (state.baiduRequested) return;
+
+    state.baiduRequested = true;
+    state.baiduLoading = true;
+    state.baiduLoadFailed = false;
+    if (usesChinaMap()) resetChinaMap();
+    const callbackName = `__initMaimaiBaiduMap${++state.baiduLoadAttempt}`;
+    const script = document.createElement("script");
+    script.id = "maimai-baidu-jsapi";
+    script.src = `https://api.map.baidu.com/api?v=4.0&ak=${encodeURIComponent(key)}&callback=${encodeURIComponent(callbackName)}`;
+    script.async = true;
+    script.defer = true;
+    state.baiduScript = script;
+    window[callbackName] = function () {
+      if (state.baiduScript !== script) return;
+      clearBaiduLoadTimer();
+      state.baiduScript = null;
+      try {
+        delete window[callbackName];
+      } catch (error) {
+        window[callbackName] = undefined;
+      }
+      initBaiduMaps();
+    };
+    script.onload = function () {
+      window.setTimeout(() => failBaiduLoad(script, callbackName), 0);
+    };
+    script.onerror = function () {
+      failBaiduLoad(script, callbackName);
+    };
+    state.baiduLoadTimer = window.setTimeout(
+      () => failBaiduLoad(script, callbackName),
+      15000,
+    );
+    document.head.appendChild(script);
+  }
+
+  function initBaiduMaps() {
+    if (state.baiduReady) return;
+    state.baiduLoading = false;
+    if (!window.BMap?.Map || !els.baiduMap) {
+      state.baiduRequested = false;
+      state.baiduLoadFailed = true;
+      if (usesChinaMap()) {
+        resetChinaMap();
+        updateMapStatus();
+      }
+      return;
+    }
+    try {
+      state.baiduMapInstance = new BMap.Map(els.baiduMap);
+      state.baiduMapInstance.centerAndZoom(new BMap.Point(104.2, 35.9), 5);
+      state.baiduMapInstance.enableScrollWheelZoom(true);
+      state.baiduGeocoder = new BMap.Geocoder();
+      state.baiduReady = true;
+      state.baiduLoadFailed = false;
       els.chinaMap?.classList.add("is-loaded");
-      setChinaMapMessage(
-        `Gaode navigation finished for ${location.name}. Verify the address, or use “Open in Gaode” if the frame is blank.`,
-      );
-      updateMapStatus();
-    });
-    els.chinaMapFrame = frame;
-    previousFrame.replaceWith(frame);
-    state.chinaLoadTimer = window.setTimeout(() => {
-      if (
-        token !== state.chinaRequestToken
-        || frame !== els.chinaMapFrame
-        || !state.chinaFrameLoading
-      ) {
-        return;
+      if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = true;
+      if (usesChinaMap()) {
+        const pending = state.locations.find(
+          (location) => location.id === state.baiduPendingLocationId,
+        );
+        if (pending && state.selectedLocationId === pending.id) {
+          geocodeBaiduLocation(pending, state.baiduFocusToken);
+        } else {
+          updateMapStatus();
+        }
       }
+    } catch (error) {
+      console.warn("Baidu Map initialization failed.", error);
+      state.baiduRequested = false;
+      state.baiduLoading = false;
+      state.baiduLoadFailed = true;
+      if (usesChinaMap()) {
+        resetChinaMap();
+        updateMapStatus();
+      }
+    }
+  }
+
+  function geocodeBaiduLocation(location, token) {
+    if (!state.baiduReady || !state.baiduGeocoder || !state.baiduMapInstance) return;
+    if (
+      state.baiduFocusedLocationId === location.id
+      && state.baiduMarker
+      && state.baiduPoint
+    ) {
+      state.baiduMapInstance.centerAndZoom(state.baiduPoint, 17);
+      if (state.baiduInfo) {
+        state.baiduMapInstance.openInfoWindow(state.baiduInfo, state.baiduPoint);
+      }
+      updateMapStatus();
+      return;
+    }
+
+    const datasetSequence = state.loadSequence;
+    clearBaiduGeocodeTimer();
+    state.baiduPendingLocationId = location.id;
+    state.baiduGeocoding = true;
+    clearBaiduMarker();
+    setChinaMapMessage(`Locating ${location.name} from its official Wahlap address...`, true);
+    updateMapStatus();
+    const requestIsCurrent = () => (
+      token === state.baiduFocusToken
+      && datasetSequence === state.loadSequence
+      && state.datasetId === "china"
+      && usesChinaMap()
+      && state.selectedLocationId === location.id
+    );
+    const geocodeTimer = window.setTimeout(() => {
+      if (state.baiduGeocodeTimer === geocodeTimer) {
+        state.baiduGeocodeTimer = null;
+      }
+      if (!requestIsCurrent()) return;
+      state.baiduFocusToken += 1;
+      state.baiduGeocoding = false;
+      state.baiduPendingLocationId = null;
       setChinaMapMessage(
-        `Gaode is still loading ${location.name}. Use “Open in Gaode” if the frame stays blank.`,
-        true,
+        `Baidu took too long to locate ${location.name}. Use the external Baidu link or select the store again.`,
       );
       setStatus(
-        `Gaode is still loading the selected store search. No bulk markers were created; `
-        + "the external Gaode link remains available.",
+        `Baidu took too long to locate ${location.name}. Select the store again to retry; no bulk markers are loaded.`,
       );
     }, 12000);
-    updateMapStatus();
+    state.baiduGeocodeTimer = geocodeTimer;
+    state.baiduGeocoder.getPoint(location.address, (point) => {
+      if (!requestIsCurrent()) return;
+      clearBaiduGeocodeTimer();
+
+      state.baiduGeocoding = false;
+      state.baiduPendingLocationId = null;
+      if (!point) {
+        setChinaMapMessage(
+          `Baidu could not locate ${location.name} from the official address. Use “Open in Baidu”.`,
+        );
+        setStatus(
+          `Baidu could not locate ${location.name}. The official Wahlap address and external Baidu link remain available.`,
+        );
+        return;
+      }
+
+      clearBaiduMarker();
+      const marker = new BMap.Marker(point, { title: location.name });
+      const info = new BMap.InfoWindow(`
+        <div class="maimai-map-info">
+          <strong>${escapeHtml(location.name)}</strong>
+          <span>${escapeHtml(locationAreaLabel(location))}</span>
+          <p>${escapeHtml(location.address)}</p>
+          <a href="${baiduSearchUrl(location)}" target="_blank" rel="noopener">Open in Baidu Maps</a>
+        </div>
+      `, { width: 280 });
+      state.baiduMapInstance.addOverlay(marker);
+      state.baiduMapInstance.centerAndZoom(point, 17);
+      state.baiduMapInstance.openInfoWindow(info, point);
+      marker.addEventListener?.("click", () => {
+        if (state.baiduMarker === marker && usesChinaMap()) {
+          state.baiduMapInstance.openInfoWindow(info, point);
+        }
+      });
+      state.baiduMarker = marker;
+      state.baiduInfo = info;
+      state.baiduPoint = point;
+      state.baiduFocusedLocationId = location.id;
+      setChinaMapMessage(
+        `Showing one address-matched marker for ${location.name}. Verify it against the official Wahlap address.`,
+      );
+      updateMapStatus();
+    }, location.subregion);
+  }
+
+  function focusChinaLocation(location) {
+    const url = baiduSearchUrl(location);
+    const sameSelection = state.selectedLocationId === location.id;
+    markSelectedLocation(location.id);
+    showMapProvider("baidu");
+    if (els.chinaMapExternal) els.chinaMapExternal.href = url;
+    if (els.chinaMapBanner) els.chinaMapBanner.hidden = false;
+
+    if (!getBaiduApiKey() || state.baiduLoadFailed) {
+      setChinaMapMessage(
+        `The interactive Baidu map needs a valid Browser AK. Use “Open in Baidu” for ${location.name}.`,
+      );
+      updateMapStatus();
+      return;
+    }
+    if (sameSelection && state.baiduGeocoding) return;
+    if (sameSelection && state.baiduFocusedLocationId === location.id && state.baiduMarker) {
+      geocodeBaiduLocation(location, state.baiduFocusToken);
+      return;
+    }
+
+    const token = ++state.baiduFocusToken;
+    state.baiduPendingLocationId = location.id;
+    if (!state.baiduReady) {
+      setChinaMapMessage(`Baidu Map is loading; ${location.name} will be selected when ready.`, true);
+      updateMapStatus();
+      return;
+    }
+    geocodeBaiduLocation(location, token);
   }
 
   function loadGoogleMaps(key) {
@@ -555,29 +779,50 @@
   function updateMapStatus() {
     if (!state.payload) return;
     if (usesChinaMap()) {
+      if (!getBaiduApiKey()) {
+        setStatus(
+          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          + "Add a domain-restricted Baidu Browser AK to enable the interactive map; no bulk markers are loaded.",
+        );
+        return;
+      }
+      if (state.baiduLoading || (!state.baiduReady && !state.baiduLoadFailed)) {
+        setStatus(
+          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          + "Baidu Map is loading; no bulk markers are loaded.",
+        );
+        return;
+      }
+      if (state.baiduLoadFailed) {
+        setStatus(
+          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          + "Baidu Map could not load; use the external Baidu links while the list remains available.",
+        );
+        return;
+      }
       const selected = state.locations.find(
         (location) => location.id === state.selectedLocationId,
       );
       if (selected) {
-        if (state.chinaFrameLoading) {
+        if (state.baiduGeocoding || state.baiduPendingLocationId === selected.id) {
           setStatus(
-            `Opening one Gaode search for ${selected.name} from its official Wahlap address. `
-            + "No other store searches or bulk markers are loaded.",
+            `Locating ${selected.name} from its official Wahlap address. `
+            + "Only this store is being geocoded; no bulk markers are loaded.",
           );
-        } else if (state.chinaSearchLoaded) {
+        } else if (state.baiduFocusedLocationId === selected.id && state.baiduMarker) {
           setStatus(
-            `Gaode frame navigation finished for ${selected.name}. Check the map against the `
-            + "official Wahlap address; use the external link if the frame is blank or incorrect.",
+            `Showing one Baidu marker for ${selected.name}, matched from its official Wahlap address. `
+            + "No other store markers are loaded.",
           );
         } else {
           setStatus(
-            `Select ${selected.name} again to reopen its Gaode address search.`,
+            `Select ${selected.name} again to retry its Baidu address match.`,
           );
         }
       } else {
         setStatus(
           `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
-          + "Select a store name to open one Gaode address search; no bulk markers are loaded.",
+          + "Select a store name to create one Baidu address-matched marker; no bulk markers are loaded.",
         );
       }
       return;
@@ -618,6 +863,7 @@
     if (state.info) state.info.close();
     state.infoLocationId = null;
     state.selectedLocationId = null;
+    resetChinaMap();
     if (state.clusterer) {
       state.clusterer.clearMarkers(true);
       state.clusterer.render();
@@ -890,7 +1136,7 @@
         },
       ],
       notes: [
-        "Wahlap provides store addresses but no coordinates, so Gaode opens one store-address search only after a store is selected.",
+        "Wahlap provides store addresses but no coordinates, so Baidu geocodes only the selected store and displays one temporary marker.",
       ],
       summary: {
         total: locations.length,
@@ -981,6 +1227,7 @@
     showMapProvider(state.provider);
     if (usesChinaMap()) {
       resetChinaMap();
+      loadBaiduMaps(getBaiduApiKey());
     } else {
       els.map.setAttribute("aria-label", `${payload.label} Google Map`);
     }
@@ -1004,11 +1251,19 @@
   async function selectDataset(datasetId) {
     const config = datasetConfigs.get(datasetId);
     if (!config) return;
-    const sequence = ++state.loadSequence;
     if (state.payload && datasetId === state.datasetId) {
+      if (state.loadingDatasetId && state.loadingDatasetId !== datasetId) {
+        state.loadSequence += 1;
+        state.loadingDatasetId = null;
+      } else if (!usesChinaMap()) {
+        state.loadSequence += 1;
+      }
       setDatasetButtons(datasetId);
       root.setAttribute("aria-busy", "false");
-      if (usesChinaMap() || state.apiReady) {
+      if (usesChinaMap()) {
+        showMapProvider(state.provider);
+        updateMapStatus();
+      } else if (state.apiReady) {
         updateMapStatus();
       } else {
         setStatus(
@@ -1017,6 +1272,9 @@
       }
       return;
     }
+    const sequence = ++state.loadSequence;
+    if (usesChinaMap()) cancelBaiduGeocode();
+    state.loadingDatasetId = datasetId;
     const previousDatasetId = state.datasetId;
     setDatasetButtons(datasetId);
     root.setAttribute("aria-busy", "true");
@@ -1032,7 +1290,10 @@
       setDatasetButtons(previousDatasetId);
       setLoadError(config, error);
     } finally {
-      if (sequence === state.loadSequence) root.setAttribute("aria-busy", "false");
+      if (sequence === state.loadSequence) {
+        state.loadingDatasetId = null;
+        root.setAttribute("aria-busy", "false");
+      }
     }
   }
 

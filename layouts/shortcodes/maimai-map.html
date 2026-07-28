@@ -1,8 +1,16 @@
 {{ $mapsKey := site.Params.maimai_google_maps_key | default (os.Getenv "HUGO_MAIMAI_GOOGLE_MAPS_KEY") }}
+{{ $baiduMapsAk := os.Getenv "HUGO_MAIMAI_BAIDU_MAPS_AK" }}
 <script>
   document.currentScript.closest(".article")?.classList.add("maimai-map-page");
 </script>
-<div class="maimai-map-app" data-maimai-map data-default-dataset="current" data-google-maps-key="{{ $mapsKey }}" aria-busy="true">
+<div
+  class="maimai-map-app"
+  data-maimai-map
+  data-default-dataset="current"
+  data-google-maps-key="{{ $mapsKey }}"
+  data-baidu-maps-ak="{{ $baiduMapsAk }}"
+  aria-busy="true"
+>
   <div class="maimai-map-toolbar">
     <div class="maimai-map-heading">
       <span>Arcade Locator</span>
@@ -37,7 +45,7 @@
         data-support-url="/data/maimai_china_province_centers.json"
         data-source-url="https://wc.wahlap.net/maidx/location/index.html"
         data-adapter="wahlap"
-        data-provider="amap"
+        data-provider="baidu"
         data-label="Mainland China"
       >Mainland China</button>
       <button
@@ -88,22 +96,15 @@
         </div>
       </div>
       <div class="maimai-map-provider maimai-china-map" data-china-map hidden aria-hidden="true">
-        <iframe
-          data-china-map-frame
-          title="Mainland China Gaode Map"
-          loading="lazy"
-          referrerpolicy="strict-origin-when-cross-origin"
-          sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-          hidden
-        ></iframe>
+        <div class="maimai-baidu-map" data-baidu-map aria-label="Mainland China Baidu Map"></div>
         <div class="maimai-map-placeholder maimai-china-map-empty" data-china-map-empty>
-          <strong>Gaode Map is ready</strong>
-          <span>Select a store name on the right to open only that address search.</span>
+          <strong data-china-map-empty-title>Baidu Map</strong>
+          <span data-china-map-empty-message>The map will load only when Mainland China is selected.</span>
         </div>
         <div class="maimai-china-map-banner" data-china-map-banner hidden>
-          <strong>Gaode Map</strong>
-          <span data-china-map-message>Select a store name on the right to open one Gaode address search.</span>
-          <a data-china-map-external href="https://ditu.amap.com/" target="_blank" rel="noopener">Open in Gaode</a>
+          <strong>Baidu Map</strong>
+          <span data-china-map-message>Select a store name on the right to locate only that address.</span>
+          <a data-china-map-external href="https://map.baidu.com/" target="_blank" rel="noopener">Open in Baidu</a>
         </div>
       </div>
     </div>

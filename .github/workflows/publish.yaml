@@ -49,6 +49,7 @@ jobs:
       - name: Build with Hugo
         env:
           HUGO_ENVIRONMENT: production
+          HUGO_MAIMAI_BAIDU_MAPS_AK: ${{ secrets.MAIMAI_BAIDU_BROWSER_AK }}
         run: |
           echo "Hugo Cache Dir: $(hugo config | grep cachedir)"
           hugo --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"

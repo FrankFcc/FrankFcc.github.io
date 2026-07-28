@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-07-27T00:00:00Z",
+  "coordinatePrecision": "province-center",
+  "source": {
+    "name": "ChinaRegionDistrict province centers (derived from AMap)",
+    "url": "https://github.com/boyan01/ChinaRegionDistrict"
+  },
+  "mapGroups": [
+    {"id": "cn-province-shanghai", "key": "上海", "name": "上海", "lat": 31.230372, "lng": 121.473662},
+    {"id": "cn-province-yunnan", "key": "云南", "name": "云南", "lat": 25.045806, "lng": 102.710002},
+    {"id": "cn-province-inner-mongolia", "key": "内蒙古", "name": "内蒙古", "lat": 40.81739, "lng": 111.76629},
+    {"id": "cn-province-beijing", "key": "北京", "name": "北京", "lat": 39.904211, "lng": 116.407394},
+    {"id": "cn-province-jilin", "key": "吉林", "name": "吉林", "lat": 43.897016, "lng": 125.32568},
+    {"id": "cn-province-sichuan", "key": "四川", "name": "四川", "lat": 30.651239, "lng": 104.075809},
+    {"id": "cn-province-tianjin", "key": "天津", "name": "天津", "lat": 39.084158, "lng": 117.200983},
+    {"id": "cn-province-ningxia", "key": "宁夏", "name": "宁夏", "lat": 38.472641, "lng": 106.259126},
+    {"id": "cn-province-anhui", "key": "安徽", "name": "安徽", "lat": 31.733806, "lng": 117.329949},
+    {"id": "cn-province-shandong", "key": "山东", "name": "山东", "lat": 36.671156, "lng": 117.019915},
+    {"id": "cn-province-shanxi", "key": "山西", "name": "山西", "lat": 37.873499, "lng": 112.562678},
+    {"id": "cn-province-guangdong", "key": "广东", "name": "广东", "lat": 23.132324, "lng": 113.26641},
+    {"id": "cn-province-guangxi", "key": "广西", "name": "广西", "lat": 22.815478, "lng": 108.327546},
+    {"id": "cn-province-xinjiang", "key": "新疆", "name": "新疆", "lat": 43.793026, "lng": 87.627704},
+    {"id": "cn-province-jiangsu", "key": "江苏", "name": "江苏", "lat": 32.060875, "lng": 118.762765},
+    {"id": "cn-province-jiangxi", "key": "江西", "name": "江西", "lat": 28.63666, "lng": 115.81635},
+    {"id": "cn-province-hebei", "key": "河北", "name": "河北", "lat": 38.037433, "lng": 114.530235},
+    {"id": "cn-province-henan", "key": "河南", "name": "河南", "lat": 34.765869, "lng": 113.753394},
+    {"id": "cn-province-zhejiang", "key": "浙江", "name": "浙江", "lat": 30.266597, "lng": 120.152585},
+    {"id": "cn-province-hainan", "key": "海南", "name": "海南", "lat": 20.017377, "lng": 110.349228},
+    {"id": "cn-province-hubei", "key": "湖北", "name": "湖北", "lat": 30.546557, "lng": 114.341745},
+    {"id": "cn-province-hunan", "key": "湖南", "name": "湖南", "lat": 28.112743, "lng": 112.9836},
+    {"id": "cn-province-gansu", "key": "甘肃", "name": "甘肃", "lat": 36.05956, "lng": 103.826447},
+    {"id": "cn-province-fujian", "key": "福建", "name": "福建", "lat": 26.100779, "lng": 119.295143},
+    {"id": "cn-province-guizhou", "key": "贵州", "name": "贵州", "lat": 26.600055, "lng": 106.70546},
+    {"id": "cn-province-liaoning", "key": "辽宁", "name": "辽宁", "lat": 41.836175, "lng": 123.431382},
+    {"id": "cn-province-chongqing", "key": "重庆", "name": "重庆", "lat": 29.562849, "lng": 106.551643},
+    {"id": "cn-province-shaanxi", "key": "陕西", "name": "陕西", "lat": 34.265502, "lng": 108.954347},
+    {"id": "cn-province-qinghai", "key": "青海", "name": "青海", "lat": 36.620939, "lng": 101.780268},
+    {"id": "cn-province-heilongjiang", "key": "黑龙江", "name": "黑龙江", "lat": 45.742366, "lng": 126.661665}
+  ]
+}

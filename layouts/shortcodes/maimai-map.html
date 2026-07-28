@@ -2,48 +2,82 @@
 <script>
   document.currentScript.closest(".article")?.classList.add("maimai-map-page");
 </script>
-<div class="maimai-map-app" data-maimai-map data-data-url="/data/maimai_locations.json" data-google-maps-key="{{ $mapsKey }}">
+<div class="maimai-map-app" data-maimai-map data-default-dataset="current" data-google-maps-key="{{ $mapsKey }}" aria-busy="true">
   <div class="maimai-map-toolbar">
     <div class="maimai-map-heading">
       <span>Arcade Locator</span>
-      <strong>maimai Japan + United States</strong>
+      <strong data-dataset-title>maimai Japan + United States</strong>
     </div>
     <div class="maimai-map-stats" aria-label="Location totals">
       <span data-stat-total>...</span>
-      <span data-stat-jp>...</span>
-      <span data-stat-us>...</span>
+      <span data-stat-mapped>...</span>
+      <span data-stat-areas>...</span>
     </div>
   </div>
 
   <div class="maimai-map-controls">
-    <div class="maimai-map-tabs" role="tablist" aria-label="Region filter">
-      <button type="button" class="is-active" data-region="all">All</button>
-      <button type="button" data-region="Japan">Japan</button>
-      <button type="button" data-region="United States">US</button>
+    <div class="maimai-map-tabs" role="group" aria-label="Map dataset">
+      <button
+        type="button"
+        class="is-active"
+        aria-pressed="true"
+        data-dataset="current"
+        data-data-url="/data/maimai_locations.json"
+        data-source-url="https://location.am-all.net/alm/location?gm=96"
+        data-label="Japan + US"
+        data-csv-url="/data/maimai_locations.csv"
+        data-kml-url="/data/maimai_locations.kml"
+      >Japan + US</button>
+      <button
+        type="button"
+        aria-pressed="false"
+        data-dataset="china"
+        data-data-url="https://sega-register.wahlap.net/api/sega/maidx/rest/location"
+        data-support-url="/data/maimai_china_province_centers.json"
+        data-source-url="https://wc.wahlap.net/maidx/location/index.html"
+        data-adapter="wahlap"
+        data-label="Mainland China"
+      >Mainland China</button>
+      <button
+        type="button"
+        aria-pressed="false"
+        data-dataset="worldwide"
+        data-data-url="/data/maimai_locations_worldwide.json"
+        data-source-url="https://location.am-all.net/alm/location?gm=98&amp;lang=en"
+        data-label="Worldwide"
+        data-csv-url="/data/maimai_locations_worldwide.csv"
+        data-kml-url="/data/maimai_locations_worldwide.kml"
+      >Worldwide</button>
     </div>
     <label>
       <span>Search</span>
-      <input type="search" data-search placeholder="Store, address, state, prefecture">
+      <input type="search" data-search placeholder="Store, address, country, province, area">
     </label>
     <label>
-      <span>Area</span>
+      <span>Country / area</span>
+      <select data-country>
+        <option value="">All countries / areas</option>
+      </select>
+    </label>
+    <label>
+      <span>Province / area</span>
       <select data-subregion>
         <option value="">All areas</option>
       </select>
     </label>
   </div>
 
-  <div class="maimai-map-status" data-status>Loading official location data...</div>
+  <div class="maimai-map-status" data-status role="status" aria-live="polite" aria-atomic="true">Loading official location data...</div>
 
-  <div class="maimai-map-exports">
-    <span>Google My Maps import</span>
+  <div class="maimai-map-exports" data-exports>
+    <span data-export-label>Google My Maps import</span>
     <a href="https://www.google.com/maps/d/" target="_blank" rel="noopener">Open My Maps</a>
-    <a href="/data/maimai_locations.csv" download>Download CSV</a>
-    <a href="/data/maimai_locations.kml" download>Download KML</a>
+    <a data-export-csv href="/data/maimai_locations.csv" download>Download CSV</a>
+    <a data-export-kml href="/data/maimai_locations.kml" download>Download KML</a>
   </div>
 
   <div class="maimai-map-layout">
-    <div class="maimai-map-canvas" data-map aria-label="maimai Google Map">
+    <div class="maimai-map-canvas" data-map role="region" aria-label="maimai Google Map">
       <div class="maimai-map-placeholder">
         <strong>Google Maps loading</strong>
         <span>The official location list remains available if the map cannot load.</span>

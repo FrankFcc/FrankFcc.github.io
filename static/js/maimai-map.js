@@ -2,27 +2,49 @@
   const root = document.querySelector("[data-maimai-map]");
   if (!root) return;
 
-  const dataUrl = root.dataset.dataUrl || "/data/maimai_locations.json";
+  const datasetButtons = Array.from(root.querySelectorAll("[data-dataset]"));
+  const datasetConfigs = new Map(datasetButtons.map((button) => [
+    button.dataset.dataset,
+    {
+      id: button.dataset.dataset,
+      label: button.dataset.label || button.textContent.trim(),
+      dataUrl: button.dataset.dataUrl,
+      supportUrl: button.dataset.supportUrl || "",
+      sourceUrl: button.dataset.sourceUrl || "",
+      adapter: button.dataset.adapter || "json",
+      csvUrl: button.dataset.csvUrl || "",
+      kmlUrl: button.dataset.kmlUrl || "",
+    },
+  ]));
+
   const els = {
+    datasetTitle: root.querySelector("[data-dataset-title]"),
     total: root.querySelector("[data-stat-total]"),
-    jp: root.querySelector("[data-stat-jp]"),
-    us: root.querySelector("[data-stat-us]"),
+    mapped: root.querySelector("[data-stat-mapped]"),
+    areas: root.querySelector("[data-stat-areas]"),
     status: root.querySelector("[data-status]"),
     search: root.querySelector("[data-search]"),
+    country: root.querySelector("[data-country]"),
     subregion: root.querySelector("[data-subregion]"),
     map: root.querySelector("[data-map]"),
     list: root.querySelector("[data-list]"),
     visibleCount: root.querySelector("[data-visible-count]"),
     openVisible: root.querySelector("[data-open-visible]"),
     source: root.querySelector("[data-source]"),
-    tabs: Array.from(root.querySelectorAll("[data-region]")),
+    exports: root.querySelector("[data-exports]"),
+    exportLabel: root.querySelector("[data-export-label]"),
+    exportCsv: root.querySelector("[data-export-csv]"),
+    exportKml: root.querySelector("[data-export-kml]"),
   };
 
   const state = {
+    datasetId: root.dataset.defaultDataset || datasetButtons[0]?.dataset.dataset || "current",
     payload: null,
+    payloadCache: new Map(),
     locations: [],
     filtered: [],
-    region: "all",
+    mapItems: [],
+    country: "",
     query: "",
     subregion: "",
     map: null,
@@ -31,7 +53,11 @@
     markers: new Map(),
     clusterer: null,
     apiReady: false,
+    googleRequested: false,
+    loadSequence: 0,
   };
+
+  let searchTimer = null;
 
   function getApiKey() {
     const params = new URLSearchParams(window.location.search);
@@ -48,8 +74,16 @@
     els.status.textContent = text;
   }
 
+  function setLoadError(config, error) {
+    const sourceLink = config.sourceUrl
+      ? ` <a href="${escapeHtml(config.sourceUrl)}" target="_blank" rel="noopener">Open the official locator</a>.`
+      : "";
+    els.status.innerHTML = `Could not load ${escapeHtml(config.label)} location data: `
+      + `${escapeHtml(error.message)}.${sourceLink}`;
+  }
+
   function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, (char) => ({
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
@@ -58,53 +92,154 @@
     }[char]));
   }
 
+  function hasCoordinates(location) {
+    return typeof location?.lat === "number"
+      && Number.isFinite(location.lat)
+      && typeof location?.lng === "number"
+      && Number.isFinite(location.lng);
+  }
+
   function googleMapsUrl(location) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.name} ${location.address}`)}`;
+    const query = location.aggregate
+      ? `maimai ${location.name}`
+      : `${location.name} ${location.address}`;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+
+  function locationAreaLabel(location) {
+    return [location.country, location.subregion].filter(Boolean).join(" / ");
   }
 
   function markerColor(location) {
+    if (state.datasetId === "china") return "#d46a2f";
+    if (state.datasetId === "worldwide") return "#3b7d5b";
     if (location.country === "Japan") return "#d84a3a";
     return "#256f9c";
   }
 
-  function updateStats(summary) {
-    els.total.textContent = `${summary.total.toLocaleString()} total`;
-    els.jp.textContent = `${summary.japan.toLocaleString()} Japan`;
-    els.us.textContent = `${summary.unitedStates.toLocaleString()} US`;
+  function mappedTotal(payload) {
+    if (typeof payload.summary?.mapped === "number") return payload.summary.mapped;
+    return payload.locations.filter(hasCoordinates).length;
+  }
+
+  function areaTotal(payload) {
+    if (typeof payload.summary?.areaCount === "number") return payload.summary.areaCount;
+    return new Set(payload.locations.map((location) => location.country).filter(Boolean)).size;
+  }
+
+  function updateStats(payload) {
+    const total = payload.summary?.total ?? payload.locations.length;
+    const mapped = mappedTotal(payload);
+    const areas = areaTotal(payload);
+    els.total.textContent = `${total.toLocaleString()} locations`;
+    if (payload.mapMode === "region-summary") {
+      els.mapped.textContent = `${payload.mapGroups.length.toLocaleString()} map groups`;
+      els.areas.textContent = `${areas.toLocaleString()} provinces`;
+    } else {
+      els.mapped.textContent = `${mapped.toLocaleString()} mapped`;
+      els.areas.textContent = `${areas.toLocaleString()} areas`;
+    }
   }
 
   function renderSource() {
+    if (!state.payload) {
+      els.source.textContent = "";
+      return;
+    }
     const generated = state.payload.generatedAt
       ? new Date(state.payload.generatedAt).toLocaleString()
       : "unknown";
-    const sources = state.payload.sources
-      .map((source) => `<a href="${source.locator}" target="_blank" rel="noopener">${escapeHtml(source.name)}</a>`)
+    const sources = (state.payload.sources || [])
+      .map((source) => (
+        `<a href="${escapeHtml(source.locator || source.url)}" target="_blank" rel="noopener">`
+        + `${escapeHtml(source.name)}</a>`
+      ))
       .join(" / ");
-    els.source.innerHTML = `Source: ${sources}. Dataset refreshed ${escapeHtml(generated)}.`;
+    const refreshLabel = state.payload.live ? "Live data loaded" : "Dataset refreshed";
+    const note = state.payload.notes?.[0]
+      ? ` ${escapeHtml(state.payload.notes[0])}`
+      : "";
+    els.source.innerHTML = `Source: ${sources}. ${refreshLabel} ${escapeHtml(generated)}.${note}`;
+  }
+
+  function updateExports(config) {
+    const available = Boolean(config.csvUrl && config.kmlUrl);
+    els.exports.hidden = !available;
+    if (!available) return;
+    els.exportLabel.textContent = `${config.label} data`;
+    els.exportCsv.href = config.csvUrl;
+    els.exportKml.href = config.kmlUrl;
+  }
+
+  function populateCountries() {
+    const countries = Array.from(new Set(
+      state.locations.map((location) => location.country).filter(Boolean),
+    )).sort((a, b) => a.localeCompare(b));
+    state.country = countries.length === 1 ? countries[0] : "";
+    els.country.innerHTML = '<option value="">All countries / areas</option>' + countries
+      .map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`)
+      .join("");
+    els.country.value = state.country;
+    els.country.disabled = countries.length <= 1;
   }
 
   function populateSubregions() {
     const subregions = Array.from(new Set(
       state.locations
-        .filter((location) => state.region === "all" || location.country === state.region)
+        .filter((location) => !state.country || location.country === state.country)
         .map((location) => location.subregion)
         .filter(Boolean),
     )).sort((a, b) => a.localeCompare(b));
-    const previous = els.subregion.value;
-    els.subregion.innerHTML = '<option value="">All areas</option>' + subregions
+    const previous = state.subregion;
+    els.subregion.innerHTML = '<option value="">All provinces / areas</option>' + subregions
       .map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
       .join("");
     if (subregions.includes(previous)) {
       els.subregion.value = previous;
     } else {
       state.subregion = "";
+      els.subregion.value = "";
     }
+    els.subregion.disabled = subregions.length === 0;
+  }
+
+  function usesGroupedOverview() {
+    if (!state.payload) return false;
+    if (state.payload.mapMode === "region-summary") return true;
+    return state.payload.mapMode === "grouped-overview" && !state.country;
+  }
+
+  function buildMapItems() {
+    if (!usesGroupedOverview()) return state.filtered.filter(hasCoordinates);
+
+    const groupField = state.payload.groupField
+      || (state.payload.mapMode === "region-summary" ? "subregion" : "country");
+    const counts = new Map();
+    state.filtered.forEach((location) => {
+      const key = location[groupField];
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return (state.payload.mapGroups || [])
+      .filter((group) => counts.has(group.key))
+      .map((group) => {
+        const count = counts.get(group.key);
+        return {
+          ...group,
+          id: `${group.id}-${count}`,
+          count,
+          aggregate: true,
+          address: state.payload.mapMode === "region-summary"
+            ? "Approximate province-center summary marker"
+            : "Official country / area summary marker",
+        };
+      });
   }
 
   function applyFilters() {
+    if (!state.payload) return;
     const query = state.query.trim().toLowerCase();
     state.filtered = state.locations.filter((location) => {
-      if (state.region !== "all" && location.country !== state.region) return false;
+      if (state.country && location.country !== state.country) return false;
       if (state.subregion && location.subregion !== state.subregion) return false;
       if (!query) return true;
       const haystack = [
@@ -115,6 +250,7 @@
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     });
+    state.mapItems = buildMapItems();
     renderList();
     renderMarkers();
     updateBounds();
@@ -124,16 +260,16 @@
     els.visibleCount.textContent = `${state.filtered.length.toLocaleString()} locations`;
     els.openVisible.href = state.filtered.length === 1
       ? googleMapsUrl(state.filtered[0])
-      : "https://www.google.com/maps/search/maimai";
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`maimai ${state.payload?.label || ""}`)}`;
 
     const visibleItems = state.filtered.slice(0, 250);
     els.list.innerHTML = visibleItems.map((location) => `
       <article class="maimai-map-item" data-id="${escapeHtml(location.id)}">
-        <span>${escapeHtml(location.country)} / ${escapeHtml(location.subregion)}</span>
+        <span>${escapeHtml(locationAreaLabel(location))}</span>
         <strong>${escapeHtml(location.name)}</strong>
         <p>${escapeHtml(location.address)}</p>
         <div>
-          <button type="button" data-focus="${escapeHtml(location.id)}">Focus</button>
+          <button type="button" data-focus="${escapeHtml(location.id)}">${hasCoordinates(location) ? "Focus" : "Search map"}</button>
           <a href="${googleMapsUrl(location)}" target="_blank" rel="noopener">Google Maps</a>
         </div>
       </article>
@@ -170,8 +306,8 @@
     if (state.apiReady) return;
     state.apiReady = true;
     state.map = new google.maps.Map(els.map, {
-      center: { lat: 36.2, lng: 139.1 },
-      zoom: 5,
+      center: { lat: 34.8, lng: 120 },
+      zoom: 4,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: true,
@@ -190,9 +326,7 @@
     try {
       const algorithm = clusterLibrary.SuperClusterViewportAlgorithm
         ? new clusterLibrary.SuperClusterViewportAlgorithm({
-          // Keep list-item focus at zoom 15 showing the individual location.
           maxZoom: 14,
-          // Retain a small off-screen buffer so clusters do not pop at the edge.
           viewportPadding: 80,
         })
         : undefined;
@@ -209,12 +343,26 @@
     }
   }
 
-  function hasCoordinates(location) {
-    return typeof location.lat === "number" && typeof location.lng === "number";
-  }
-
-  function updateMapStatus(unmappedCount) {
-    const mappedCount = state.filtered.length - unmappedCount;
+  function updateMapStatus() {
+    if (!state.payload) return;
+    if (state.payload.mapMode === "region-summary") {
+      setStatus(
+        `${state.filtered.length.toLocaleString()} live official locations summarized into `
+        + `${state.mapItems.length.toLocaleString()} province markers. `
+        + "Wahlap does not publish exact store coordinates, so store actions use Google Maps search.",
+      );
+      return;
+    }
+    if (state.payload.mapMode === "grouped-overview" && !state.country) {
+      setStatus(
+        `${state.filtered.length.toLocaleString()} official locations summarized into `
+        + `${state.mapItems.length.toLocaleString()} country / area markers. `
+        + "Select a country / area to show exact clustered store markers.",
+      );
+      return;
+    }
+    const mappedCount = state.mapItems.length;
+    const unmappedCount = state.filtered.length - mappedCount;
     const suffix = unmappedCount
       ? ` ${unmappedCount.toLocaleString()} filtered locations do not include official coordinates and remain list-only.`
       : "";
@@ -224,9 +372,32 @@
     setStatus(`${mappedCount.toLocaleString()} ${displayMode} from the official coordinate dataset.${suffix}`);
   }
 
+  function detachCachedMarkers() {
+    for (const marker of state.markers.values()) marker.setMap?.(null);
+    state.markers.clear();
+  }
+
+  function clearActiveMarkers() {
+    if (state.info) state.info.close();
+    state.infoLocationId = null;
+    if (state.clusterer) {
+      state.clusterer.clearMarkers(true);
+      state.clusterer.render();
+    }
+    detachCachedMarkers();
+  }
+
   function renderMarkers() {
-    if (!state.apiReady || !state.map) return;
-    const visibleIds = new Set(state.filtered.map((location) => location.id));
+    if (!state.apiReady || !state.map || !state.payload) return;
+
+    if (usesGroupedOverview()) {
+      if (state.infoLocationId) {
+        state.info.close();
+        state.infoLocationId = null;
+      }
+      detachCachedMarkers();
+    }
+    const visibleIds = new Set(state.mapItems.map((location) => location.id));
     if (state.infoLocationId && !visibleIds.has(state.infoLocationId)) {
       state.info.close();
       state.infoLocationId = null;
@@ -237,13 +408,9 @@
       }
     }
 
-    let unmappedCount = 0;
     const visibleMarkers = [];
-    state.filtered.forEach((location) => {
-      if (!hasCoordinates(location)) {
-        unmappedCount += 1;
-        return;
-      }
+    state.mapItems.forEach((location) => {
+      if (!hasCoordinates(location)) return;
       if (state.markers.has(location.id)) {
         const marker = state.markers.get(location.id);
         visibleMarkers.push(marker);
@@ -252,17 +419,35 @@
       }
       const marker = new google.maps.Marker({
         position: { lat: location.lat, lng: location.lng },
-        title: location.name,
+        title: location.aggregate
+          ? `${location.name}: ${location.count.toLocaleString()} locations`
+          : location.name,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 7,
+          scale: location.aggregate ? 13 : 7,
           fillColor: markerColor(location),
           fillOpacity: 0.92,
           strokeColor: "#ffffff",
           strokeWeight: 2,
         },
+        ...(location.aggregate
+          ? {
+            label: {
+              text: String(location.count),
+              color: "#ffffff",
+              fontSize: "10px",
+              fontWeight: "700",
+            },
+          }
+          : {}),
       });
-      marker.addListener("click", () => openInfo(location, marker));
+      marker.addListener("click", () => {
+        if (location.aggregate) {
+          selectMapGroup(location);
+        } else {
+          openInfo(location, marker);
+        }
+      });
       state.markers.set(location.id, marker);
       visibleMarkers.push(marker);
       if (!state.clusterer) marker.setMap(state.map);
@@ -272,43 +457,84 @@
       state.clusterer.addMarkers(visibleMarkers, true);
       state.clusterer.render();
     }
-    updateMapStatus(unmappedCount);
+    updateMapStatus();
   }
 
   function openInfo(location, marker) {
     state.infoLocationId = location.id;
-    state.info.setContent(`
-      <div class="maimai-map-info">
-        <strong>${escapeHtml(location.name)}</strong>
-        <span>${escapeHtml(location.country)} / ${escapeHtml(location.subregion)}</span>
-        <p>${escapeHtml(location.address)}</p>
-        <a href="${googleMapsUrl(location)}" target="_blank" rel="noopener">Open in Google Maps</a>
-      </div>
-    `);
+    if (location.aggregate) {
+      state.info.setContent(`
+        <div class="maimai-map-info">
+          <strong>${escapeHtml(location.name)}</strong>
+          <span>${location.count.toLocaleString()} locations</span>
+          <p>${escapeHtml(location.address)}</p>
+        </div>
+      `);
+    } else {
+      state.info.setContent(`
+        <div class="maimai-map-info">
+          <strong>${escapeHtml(location.name)}</strong>
+          <span>${escapeHtml(locationAreaLabel(location))}</span>
+          <p>${escapeHtml(location.address)}</p>
+          <a href="${googleMapsUrl(location)}" target="_blank" rel="noopener">Open in Google Maps</a>
+        </div>
+      `);
+    }
     state.info.open({ anchor: marker, map: state.map });
   }
 
   function updateBounds() {
     if (!state.apiReady || !state.map) return;
     const bounds = new google.maps.LatLngBounds();
-    let count = 0;
-    state.filtered.forEach((location) => {
-      if (typeof location.lat === "number" && typeof location.lng === "number") {
-        bounds.extend({ lat: location.lat, lng: location.lng });
-        count += 1;
+    const points = [];
+    state.mapItems.forEach((location) => {
+      if (hasCoordinates(location)) {
+        const point = { lat: location.lat, lng: location.lng };
+        bounds.extend(point);
+        points.push(point);
       }
     });
-    if (count > 0) state.map.fitBounds(bounds, 48);
+    if (points.length === 1) {
+      state.map.panTo(points[0]);
+      state.map.setZoom(usesGroupedOverview() ? 6 : 13);
+    } else if (points.length > 1) {
+      state.map.fitBounds(bounds, 48);
+    }
+  }
+
+  function selectMapGroup(location) {
+    if (state.payload?.mapMode === "region-summary") {
+      state.subregion = location.key;
+      els.subregion.value = state.subregion;
+    } else {
+      state.country = location.key;
+      els.country.value = state.country;
+      state.subregion = "";
+      populateSubregions();
+    }
+    applyFilters();
   }
 
   function focusLocation(id) {
     const location = state.locations.find((item) => item.id === id);
-    if (!location || !state.apiReady || !state.map) {
-      if (location) window.open(googleMapsUrl(location), "_blank", "noopener");
+    if (!location) return;
+    if (!hasCoordinates(location)) {
+      window.open(googleMapsUrl(location), "_blank", "noopener");
+      return;
+    }
+    if (state.payload?.mapMode === "grouped-overview" && !state.country) {
+      state.country = location.country;
+      els.country.value = state.country;
+      state.subregion = "";
+      populateSubregions();
+      applyFilters();
+    }
+    if (!state.apiReady || !state.map) {
+      window.open(googleMapsUrl(location), "_blank", "noopener");
       return;
     }
     const marker = state.markers.get(location.id);
-    if (!marker || !hasCoordinates(location)) {
+    if (!marker) {
       window.open(googleMapsUrl(location), "_blank", "noopener");
       return;
     }
@@ -319,8 +545,15 @@
         && google.maps.event?.addListenerOnce,
     );
     if (shouldWaitForMapIdle) {
+      const focusSequence = state.loadSequence;
+      const focusDatasetId = state.datasetId;
       google.maps.event.addListenerOnce(state.map, "idle", () => {
-        if (state.filtered.some((item) => item.id === location.id)) {
+        if (
+          focusSequence === state.loadSequence
+          && focusDatasetId === state.datasetId
+          && state.markers.get(location.id) === marker
+          && state.filtered.some((item) => item.id === location.id)
+        ) {
           openInfo(location, marker);
         }
       });
@@ -330,17 +563,234 @@
     if (!shouldWaitForMapIdle) openInfo(location, marker);
   }
 
+  function normalizeStaticPayload(payload, config) {
+    if (!payload || !Array.isArray(payload.locations)) {
+      throw new Error("invalid location payload");
+    }
+    const locations = payload.locations.map((location) => ({
+      ...location,
+      id: String(location.id),
+      country: location.country || location.region || "",
+      subregion: location.subregion || "",
+    }));
+    return {
+      ...payload,
+      id: payload.id || config.id,
+      label: payload.label || (
+        config.id === "current" ? "maimai Japan + United States" : config.label
+      ),
+      mapMode: payload.mapMode || "locations",
+      mapGroups: payload.mapGroups || [],
+      summary: {
+        ...(payload.summary || {}),
+        total: payload.summary?.total ?? locations.length,
+      },
+      locations,
+    };
+  }
+
+  function normalizeWahlapPayload(rawLocations, support, config) {
+    if (!Array.isArray(rawLocations) || rawLocations.length === 0) {
+      throw new Error("Wahlap returned an invalid location list");
+    }
+    const locations = rawLocations.map((item) => {
+      if (!item || item.id == null || !item.province || !item.arcadeName || !item.address) {
+        throw new Error("Wahlap location schema changed");
+      }
+      return {
+        id: `cn-wahlap-${String(item.id)}`,
+        sourceId: String(item.id),
+        sourcePlaceId: item.placeId == null ? null : String(item.placeId),
+        name: String(item.arcadeName),
+        address: String(item.address),
+        lat: null,
+        lng: null,
+        needsGeocode: true,
+        source: "Wahlap maimai DX official location list",
+        gameTitle: "舞萌DX / maimai DX Mainland China",
+        country: "Mainland China",
+        region: "Mainland China",
+        subregion: String(item.province),
+        officialLocatorUrl: "https://wc.wahlap.net/maidx/location/index.html",
+        detailsUrl: "https://wc.wahlap.net/maidx/location/index.html",
+      };
+    });
+    const provinces = new Set(locations.map((location) => location.subregion));
+    const mapGroups = (support?.mapGroups || []).filter((group) => provinces.has(group.key));
+    if (mapGroups.length !== provinces.size) {
+      throw new Error("China province-center coverage is incomplete");
+    }
+    return {
+      schemaVersion: 2,
+      id: config.id,
+      label: "舞萌DX Mainland China",
+      mapMode: "region-summary",
+      groupField: "subregion",
+      generatedAt: new Date().toISOString(),
+      live: true,
+      sources: [
+        {
+          name: "Wahlap / SEGA 舞萌DX official location list",
+          url: "https://wc.wahlap.net/maidx/location/index.html",
+          locator: "https://wc.wahlap.net/maidx/location/index.html",
+        },
+        {
+          name: support.source?.name || "Province-center reference coordinates",
+          url: support.source?.url || "",
+          locator: support.source?.url || "",
+        },
+      ],
+      notes: [
+        "Province markers are approximate summaries because the Wahlap feed provides store addresses but no coordinates.",
+      ],
+      summary: {
+        total: locations.length,
+        mapped: 0,
+        needsGeocode: locations.length,
+        areaCount: provinces.size,
+      },
+      mapGroups,
+      locations,
+    };
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function loadDataset(config) {
+    if (state.payloadCache.has(config.id)) return state.payloadCache.get(config.id);
+    const request = (async () => {
+      if (config.adapter === "wahlap") {
+        const [locations, support] = await Promise.all([
+          fetchJson(config.dataUrl),
+          fetchJson(config.supportUrl),
+        ]);
+        return normalizeWahlapPayload(locations, support, config);
+      }
+      return normalizeStaticPayload(await fetchJson(config.dataUrl), config);
+    })();
+    state.payloadCache.set(config.id, request);
+    try {
+      const payload = await request;
+      state.payloadCache.set(config.id, payload);
+      return payload;
+    } catch (error) {
+      state.payloadCache.delete(config.id);
+      throw error;
+    }
+  }
+
+  function setDatasetButtons(activeId) {
+    datasetButtons.forEach((button) => {
+      const active = button.dataset.dataset === activeId;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function resetActiveDataset(config) {
+    clearActiveMarkers();
+    state.payload = null;
+    state.locations = [];
+    state.filtered = [];
+    state.mapItems = [];
+    state.country = "";
+    state.query = "";
+    state.subregion = "";
+    els.datasetTitle.textContent = config.label;
+    els.total.textContent = "...";
+    els.mapped.textContent = "...";
+    els.areas.textContent = "...";
+    els.search.value = "";
+    els.search.disabled = true;
+    els.country.innerHTML = '<option value="">All countries / areas</option>';
+    els.country.disabled = true;
+    els.subregion.innerHTML = '<option value="">All provinces / areas</option>';
+    els.subregion.disabled = true;
+    els.visibleCount.textContent = "0 locations";
+    els.list.innerHTML = "";
+    els.source.textContent = "";
+    updateExports(config);
+  }
+
+  function activatePayload(payload, config) {
+    state.payload = payload;
+    state.locations = payload.locations;
+    state.filtered = [];
+    state.mapItems = [];
+    state.country = "";
+    state.query = "";
+    state.subregion = "";
+    els.datasetTitle.textContent = payload.label;
+    els.map.setAttribute("aria-label", `${payload.label} Google Map`);
+    els.search.disabled = false;
+    updateStats(payload);
+    renderSource();
+    populateCountries();
+    populateSubregions();
+    applyFilters();
+    if (!state.googleRequested) {
+      state.googleRequested = true;
+      loadGoogleMaps(getApiKey());
+    }
+    if (!state.apiReady) {
+      setStatus(`${payload.summary.total.toLocaleString()} official locations loaded. Google Maps loading...`);
+    }
+  }
+
+  async function selectDataset(datasetId) {
+    const config = datasetConfigs.get(datasetId);
+    if (!config) return;
+    const sequence = ++state.loadSequence;
+    if (state.payload && datasetId === state.datasetId) {
+      setDatasetButtons(datasetId);
+      root.setAttribute("aria-busy", "false");
+      if (state.apiReady) {
+        updateMapStatus();
+      } else {
+        setStatus(
+          `${state.payload.summary.total.toLocaleString()} official locations loaded. Google Maps loading...`,
+        );
+      }
+      return;
+    }
+    const previousDatasetId = state.datasetId;
+    setDatasetButtons(datasetId);
+    root.setAttribute("aria-busy", "true");
+    setStatus(`Loading ${config.label} location data...`);
+    try {
+      const payload = await loadDataset(config);
+      if (sequence !== state.loadSequence) return;
+      state.datasetId = datasetId;
+      resetActiveDataset(config);
+      activatePayload(payload, config);
+    } catch (error) {
+      if (sequence !== state.loadSequence) return;
+      setDatasetButtons(previousDatasetId);
+      setLoadError(config, error);
+    } finally {
+      if (sequence === state.loadSequence) root.setAttribute("aria-busy", "false");
+    }
+  }
+
   function bindEvents() {
-    els.tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        els.tabs.forEach((item) => item.classList.toggle("is-active", item === tab));
-        state.region = tab.dataset.region || "all";
-        populateSubregions();
-        applyFilters();
-      });
+    datasetButtons.forEach((button) => {
+      button.addEventListener("click", () => selectDataset(button.dataset.dataset));
     });
     els.search.addEventListener("input", () => {
-      state.query = els.search.value;
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        state.query = els.search.value;
+        applyFilters();
+      }, 180);
+    });
+    els.country.addEventListener("change", () => {
+      state.country = els.country.value;
+      state.subregion = "";
+      populateSubregions();
       applyFilters();
     });
     els.subregion.addEventListener("change", () => {
@@ -354,23 +804,6 @@
     });
   }
 
-  fetch(dataUrl)
-    .then((response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then((payload) => {
-      state.payload = payload;
-      state.locations = payload.locations;
-      updateStats(payload.summary);
-      renderSource();
-      populateSubregions();
-      bindEvents();
-      applyFilters();
-      setStatus(`${payload.summary.total.toLocaleString()} official locations loaded.`);
-      loadGoogleMaps(getApiKey());
-    })
-    .catch((error) => {
-      setStatus(`Could not load maimai location data: ${error.message}`);
-    });
+  bindEvents();
+  selectDataset(state.datasetId);
 })();

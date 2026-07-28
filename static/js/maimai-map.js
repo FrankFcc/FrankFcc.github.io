@@ -520,7 +520,7 @@
     const callbackName = `__initMaimaiBaiduMap${++state.baiduLoadAttempt}`;
     const script = document.createElement("script");
     script.id = "maimai-baidu-jsapi";
-    script.src = `https://api.map.baidu.com/api?v=4.0&ak=${encodeURIComponent(key)}&callback=${encodeURIComponent(callbackName)}`;
+    script.src = `https://api.map.baidu.com/api?v=3.0&ak=${encodeURIComponent(key)}&callback=${encodeURIComponent(callbackName)}`;
     script.async = true;
     script.defer = true;
     state.baiduScript = script;

@@ -872,8 +872,10 @@ assert.equal(initialBaiduScriptUrl.searchParams.get("ak"), root.dataset.baiduMap
 const initialBaiduCallbackName = initialBaiduScriptUrl.searchParams.get("callback");
 assert.match(initialBaiduCallbackName, /^__initMaimaiBaiduMap\d+$/);
 assert.equal(typeof windowObject[initialBaiduCallbackName], "function");
-initialBaiduScript.onload();
-await settle();
+assert.equal(initialBaiduScript.onload, undefined);
+assert.notEqual(initialBaiduScript.removed, true);
+assert.equal(managedLongTimers.size, 1);
+fireManagedLongTimer(15000);
 assert.equal(initialBaiduScript.removed, true);
 assert.equal(typeof windowObject[initialBaiduCallbackName], "undefined");
 assert.match(elements["[data-status]"].textContent, /could not load/i);

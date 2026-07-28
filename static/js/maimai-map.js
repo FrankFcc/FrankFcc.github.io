@@ -535,9 +535,6 @@
       }
       initBaiduMaps();
     };
-    script.onload = function () {
-      window.setTimeout(() => failBaiduLoad(script, callbackName), 0);
-    };
     script.onerror = function () {
       failBaiduLoad(script, callbackName);
     };

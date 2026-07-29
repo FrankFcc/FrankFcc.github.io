@@ -763,7 +763,8 @@
         els.baiduMap.addEventListener(eventName, noteBaiduUserViewportIntent, true);
       });
       centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
-      state.baiduMapInstance.enableScrollWheelZoom?.();
+      // Baidu's current JSAPI guide uses the explicit flag to activate native wheel handling.
+      state.baiduMapInstance.enableScrollWheelZoom?.(true);
       state.baiduMapInstance.enableDoubleClickZoom?.();
       state.baiduMapInstance.enablePinchToZoom?.();
       state.baiduMapInstance.enableKeyboard?.();

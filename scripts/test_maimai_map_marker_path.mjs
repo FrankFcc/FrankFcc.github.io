@@ -562,6 +562,7 @@ class FakeBaiduMap {
     this.clearOverlaysCalls = 0;
     this.checkResizeCalls = 0;
     this.scrollWheelEnabled = false;
+    this.scrollWheelEnableArgument = undefined;
     this.pinchToZoomEnabled = false;
     this.keyboardEnabled = false;
     this.continuousZoomEnabled = false;
@@ -579,8 +580,9 @@ class FakeBaiduMap {
     this.emitZoomEnd();
   }
 
-  enableScrollWheelZoom() {
-    this.scrollWheelEnabled = true;
+  enableScrollWheelZoom(value) {
+    this.scrollWheelEnableArgument = value;
+    this.scrollWheelEnabled = value === true;
   }
 
   enablePinchToZoom() {
@@ -1133,6 +1135,7 @@ await settle();
 assert.equal(baiduMapCount, 1);
 assert.equal(managedLongTimers.size, 0);
 assert.equal(baiduMapInstance.element, elements["[data-baidu-map]"]);
+assert.equal(baiduMapInstance.scrollWheelEnableArgument, true);
 assert.equal(baiduMapInstance.scrollWheelEnabled, true);
 assert.equal(baiduMapInstance.pinchToZoomEnabled, true);
 assert.equal(baiduMapInstance.keyboardEnabled, true);

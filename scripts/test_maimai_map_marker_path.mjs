@@ -191,6 +191,7 @@ class FakeElement {
     this._innerHTML = "";
     this.classList = new FakeClassList();
     this.listeners = {};
+    this.listenerEntries = {};
     this.attributes = {};
     this.disabled = false;
     this.hidden = false;
@@ -208,8 +209,17 @@ class FakeElement {
     this._innerHTML += String(value);
   }
 
-  addEventListener(type, callback) {
-    this.listeners[type] = callback;
+  addEventListener(type, callback, options) {
+    if (!this.listenerEntries[type]) {
+      this.listenerEntries[type] = [];
+      this.listeners[type] = (event = {}) => {
+        for (const entry of this.listenerEntries[type]) {
+          entry.callback.call(this, event);
+          if (event.immediatePropagationStopped) break;
+        }
+      };
+    }
+    this.listenerEntries[type].push({ callback, options });
   }
 
   setAttribute(name, value) {
@@ -563,6 +573,7 @@ class FakeBaiduMap {
     this.checkResizeCalls = 0;
     this.scrollWheelEnabled = false;
     this.scrollWheelEnableArgument = undefined;
+    this.scrollWheelDisableCalls = 0;
     this.pinchToZoomEnabled = false;
     this.keyboardEnabled = false;
     this.continuousZoomEnabled = false;
@@ -583,6 +594,11 @@ class FakeBaiduMap {
   enableScrollWheelZoom(value) {
     this.scrollWheelEnableArgument = value;
     this.scrollWheelEnabled = value === true;
+  }
+
+  disableScrollWheelZoom() {
+    this.scrollWheelDisableCalls += 1;
+    this.scrollWheelEnabled = false;
   }
 
   enablePinchToZoom() {
@@ -643,7 +659,7 @@ class FakeBaiduMap {
   }
 
   simulateUserZoom(zoom, center = this.center) {
-    this.element.listeners.wheel?.({ type: "wheel", target: this.element });
+    this.element.listeners.pointerdown?.({ type: "pointerdown", target: this.element });
     this.zoom = zoom;
     this.center = center;
     this.emitZoomEnd();
@@ -1135,8 +1151,9 @@ await settle();
 assert.equal(baiduMapCount, 1);
 assert.equal(managedLongTimers.size, 0);
 assert.equal(baiduMapInstance.element, elements["[data-baidu-map]"]);
-assert.equal(baiduMapInstance.scrollWheelEnableArgument, true);
-assert.equal(baiduMapInstance.scrollWheelEnabled, true);
+assert.notEqual(baiduMapInstance.scrollWheelEnableArgument, true);
+assert.equal(baiduMapInstance.scrollWheelEnabled, false);
+assert.equal(baiduMapInstance.scrollWheelDisableCalls, 1);
 assert.equal(baiduMapInstance.pinchToZoomEnabled, true);
 assert.equal(baiduMapInstance.keyboardEnabled, true);
 assert.equal(baiduMapInstance.continuousZoomEnabled, true);
@@ -1161,10 +1178,47 @@ assert.ok(baiduMapInstance.overlays.every((marker) => marker.label));
 assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(elements["[data-open-visible]"].textContent, "Open Baidu");
 assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
+const baiduWheelListenerEntries = elements["[data-baidu-map]"].listenerEntries.wheel ?? [];
+const baiduCustomWheelListener = baiduWheelListenerEntries.find(
+  (entry) => entry.options?.capture === true && entry.options?.passive === false,
+);
+assert.ok(
+  baiduCustomWheelListener,
+  "Baidu fallback wheel handler must run in capture phase and be explicitly non-passive",
+);
 
 const geocodesBeforeAutomaticZoom = baiduGeocodeCalls.length;
 const weishiOverviewPoint = new FakeBaiduPoint(114.193082, 34.411437);
 baiduMapInstance.center = weishiOverviewPoint;
+elements["[data-baidu-map]"].clientHeight = 600;
+let baiduWheelTimeStamp = 1000;
+const dispatchBaiduWheel = (deltaY, deltaMode = 0, elapsedMs = 200) => {
+  baiduWheelTimeStamp += elapsedMs;
+  const event = {
+    type: "wheel",
+    deltaY,
+    deltaMode,
+    timeStamp: baiduWheelTimeStamp,
+    cancelable: true,
+    defaultPrevented: false,
+    propagationStopped: false,
+    immediatePropagationStopped: false,
+    target: elements["[data-baidu-map]"],
+    currentTarget: elements["[data-baidu-map]"],
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+    stopImmediatePropagation() {
+      this.immediatePropagationStopped = true;
+      this.propagationStopped = true;
+    },
+  };
+  elements["[data-baidu-map]"].listeners.wheel(event);
+  return event;
+};
 const clickBaiduZoomIn = () => {
   elements["[data-baidu-zoom-in]"].listeners.click({
     type: "click",
@@ -1233,6 +1287,145 @@ assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
 assert.equal(baiduMapInstance.zoomInCalls, 6);
 assert.equal(baiduMapInstance.zoomOutCalls, 5);
 assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
+
+const throttledZoomInCallsBefore = baiduMapInstance.zoomInCalls;
+const firstThrottledWheel = dispatchBaiduWheel(-120);
+assert.equal(firstThrottledWheel.defaultPrevented, true);
+assert.equal(firstThrottledWheel.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 7);
+assert.equal(baiduMapInstance.zoomInCalls, throttledZoomInCallsBefore + 1);
+const rapidThrottledWheel = dispatchBaiduWheel(-120, 0, 80);
+assert.equal(rapidThrottledWheel.defaultPrevented, true);
+assert.equal(rapidThrottledWheel.propagationStopped, true);
+assert.equal(
+  baiduMapInstance.zoom,
+  7,
+  "a second wheel event inside the minimum step interval must not zoom",
+);
+assert.equal(baiduMapInstance.zoomInCalls, throttledZoomInCallsBefore + 1);
+const resumedThrottledWheel = dispatchBaiduWheel(-120, 0, 161);
+assert.equal(resumedThrottledWheel.defaultPrevented, true);
+assert.equal(resumedThrottledWheel.propagationStopped, true);
+assert.equal(
+  baiduMapInstance.zoom,
+  8,
+  "accumulated wheel momentum may emit at most one step after the throttle interval",
+);
+assert.equal(baiduMapInstance.zoomInCalls, throttledZoomInCallsBefore + 2);
+dispatchBaiduWheel(120);
+dispatchBaiduWheel(120);
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(elements["[data-subregion]"].value, "");
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.match(elements["[data-status]"].textContent, /province overview markers/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+
+const wheelZoomInCallsBefore = baiduMapInstance.zoomInCalls;
+const wheelZoomOutCallsBefore = baiduMapInstance.zoomOutCalls;
+const zeroWheel = dispatchBaiduWheel(0);
+assert.equal(zeroWheel.defaultPrevented, false);
+assert.equal(zeroWheel.propagationStopped, false);
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore);
+assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore);
+
+const fullPixelWheelOut = dispatchBaiduWheel(120);
+assert.equal(fullPixelWheelOut.defaultPrevented, true);
+assert.equal(fullPixelWheelOut.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 5);
+assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore + 1);
+const fullPixelWheelIn = dispatchBaiduWheel(-120);
+assert.equal(fullPixelWheelIn.defaultPrevented, true);
+assert.equal(fullPixelWheelIn.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 1);
+
+const partialOppositeStart = dispatchBaiduWheel(-60);
+assert.equal(partialOppositeStart.defaultPrevented, true);
+assert.equal(partialOppositeStart.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 6);
+const partialOppositeReset = dispatchBaiduWheel(60);
+assert.equal(partialOppositeReset.defaultPrevented, true);
+assert.equal(partialOppositeReset.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 6);
+const partialOppositeComplete = dispatchBaiduWheel(60);
+assert.equal(partialOppositeComplete.defaultPrevented, true);
+assert.equal(partialOppositeComplete.propagationStopped, true);
+assert.equal(
+  baiduMapInstance.zoom,
+  5,
+  "reversing wheel direction must discard the earlier opposite-direction accumulation",
+);
+assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore + 2);
+
+dispatchBaiduWheel(-120);
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 2);
+dispatchBaiduWheel(-30);
+assert.equal(baiduMapInstance.zoom, 6);
+dispatchBaiduWheel(-30);
+assert.equal(baiduMapInstance.zoom, 6);
+dispatchBaiduWheel(-30);
+assert.equal(baiduMapInstance.zoom, 6);
+const accumulatedTrackpadWheel = dispatchBaiduWheel(-30);
+assert.equal(accumulatedTrackpadWheel.defaultPrevented, true);
+assert.equal(accumulatedTrackpadWheel.propagationStopped, true);
+assert.equal(
+  baiduMapInstance.zoom,
+  7,
+  "small same-direction trackpad deltas must accumulate into one zoom step",
+);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 3);
+assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
+assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+
+const lineModeWheel = dispatchBaiduWheel(-8, 1);
+assert.equal(lineModeWheel.defaultPrevented, true);
+assert.equal(lineModeWheel.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 8);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 4);
+const pageModeWheel = dispatchBaiduWheel(1, 2);
+assert.equal(pageModeWheel.defaultPrevented, true);
+assert.equal(pageModeWheel.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 7);
+assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore + 3);
+
+dispatchBaiduWheel(-120);
+dispatchBaiduWheel(-120);
+dispatchBaiduWheel(-120);
+const wheelIntoDistrict = dispatchBaiduWheel(-120);
+assert.equal(wheelIntoDistrict.defaultPrevented, true);
+assert.equal(wheelIntoDistrict.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 11);
+assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 8);
+assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+
+dispatchBaiduWheel(120);
+const wheelBackToCity = dispatchBaiduWheel(120);
+assert.equal(wheelBackToCity.defaultPrevented, true);
+assert.equal(wheelBackToCity.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 9);
+assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+dispatchBaiduWheel(120);
+dispatchBaiduWheel(120);
+const wheelBackToProvince = dispatchBaiduWheel(120);
+assert.equal(wheelBackToProvince.defaultPrevented, true);
+assert.equal(wheelBackToProvince.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore + 8);
+assert.equal(elements["[data-subregion]"].value, "");
+assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.match(elements["[data-status]"].textContent, /province overview markers/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
 
 baiduMapInstance.simulateUserZoom(11, weishiOverviewPoint);
 assert.equal(baiduMapInstance.zoom, 9);
@@ -1348,6 +1541,19 @@ assert.equal(
 assert.equal(chinaFirstItem.classList.contains("is-selected"), true);
 assert.equal(chinaFirstItem.attributes["aria-current"], "true");
 
+const exactMarkerZoomBeforeWheel = baiduMapInstance.zoom;
+const geocodesBeforeExactMarkerWheel = baiduGeocodeCalls.length;
+const wheelOnExactMarker = dispatchBaiduWheel(120);
+assert.equal(wheelOnExactMarker.defaultPrevented, true);
+assert.equal(wheelOnExactMarker.propagationStopped, true);
+assert.equal(baiduMapInstance.zoom, exactMarkerZoomBeforeWheel - 1);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, false);
+assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeExactMarkerWheel);
+assert.equal(chinaFirstItem.classList.contains("is-selected"), true);
+assert.equal(chinaFirstItem.attributes["aria-current"], "true");
+
 baiduMapInstance.simulateUserZoom(6, selectedChinaPoint);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(baiduMapInstance.overlays[0].isOverview, false);
@@ -1460,6 +1666,15 @@ assert.equal(clustererInstance.markers.length, currentMapped);
 assert.equal(elements["[data-map]"].hidden, false);
 assert.equal(elements["[data-china-map]"].hidden, true);
 assert.equal(baiduMapInstance.overlays.length, 0);
+const inactiveBaiduZoom = baiduMapInstance.zoom;
+const inactiveBaiduZoomInCalls = baiduMapInstance.zoomInCalls;
+const inactiveBaiduZoomOutCalls = baiduMapInstance.zoomOutCalls;
+const inactiveBaiduWheel = dispatchBaiduWheel(120);
+assert.equal(inactiveBaiduWheel.defaultPrevented, false);
+assert.equal(inactiveBaiduWheel.propagationStopped, false);
+assert.equal(baiduMapInstance.zoom, inactiveBaiduZoom);
+assert.equal(baiduMapInstance.zoomInCalls, inactiveBaiduZoomInCalls);
+assert.equal(baiduMapInstance.zoomOutCalls, inactiveBaiduZoomOutCalls);
 const restoredGoogleStatus = elements["[data-status]"].textContent;
 pendingChinaCallback(new FakeBaiduPoint(114.3, 34.9));
 assert.equal(elements["[data-status]"].textContent, restoredGoogleStatus);

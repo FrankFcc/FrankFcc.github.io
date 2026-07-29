@@ -83,6 +83,9 @@
     baiduZoomToken: 0,
     baiduPreserveViewport: false,
     baiduProgrammaticZoomEvents: 0,
+    baiduWheelDelta: 0,
+    baiduWheelLastStepAt: Number.NEGATIVE_INFINITY,
+    baiduWheelResetTimer: null,
     baiduReady: false,
     baiduRequested: false,
     baiduLoading: false,
@@ -107,6 +110,9 @@
   const CHINA_DISTRICT_ZOOM = 11;
   const CHINA_PROVINCE_MAX_ZOOM = 6;
   const CHINA_CITY_MAX_ZOOM = 9;
+  const BAIDU_WHEEL_ZOOM_THRESHOLD = 100;
+  const BAIDU_WHEEL_THROTTLE_MS = 160;
+  const BAIDU_WHEEL_IDLE_MS = 220;
   let searchTimer = null;
 
   function getApiKey() {
@@ -554,7 +560,16 @@
     state.baiduZoomToken += 1;
   }
 
+  function resetBaiduWheelGesture() {
+    if (state.baiduWheelResetTimer) {
+      window.clearTimeout(state.baiduWheelResetTimer);
+      state.baiduWheelResetTimer = null;
+    }
+    state.baiduWheelDelta = 0;
+  }
+
   function noteBaiduUserViewportIntent() {
+    resetBaiduWheelGesture();
     state.baiduProgrammaticZoomEvents = 0;
     cancelBaiduOverviewZoom();
   }
@@ -594,6 +609,56 @@
     }
   }
 
+  function normalizeBaiduWheelDelta(event) {
+    const rawDelta = Number(event.deltaY);
+    if (!Number.isFinite(rawDelta) || rawDelta === 0) return 0;
+    let scale = 1;
+    if (Number(event.deltaMode) === 1) {
+      scale = 40;
+    } else if (Number(event.deltaMode) === 2) {
+      const mapHeight = Number(els.baiduMap?.clientHeight);
+      scale = Math.max(Number.isFinite(mapHeight) ? mapHeight : 0, 800);
+    }
+    return Math.max(-240, Math.min(240, rawDelta * scale));
+  }
+
+  function handleBaiduWheel(event) {
+    if (!usesChinaMap() || !state.baiduReady || !state.baiduMapInstance) return;
+    const delta = normalizeBaiduWheelDelta(event);
+    if (!delta) return;
+
+    if (event.cancelable !== false) event.preventDefault();
+    event.stopImmediatePropagation?.();
+    event.stopPropagation?.();
+
+    if (
+      state.baiduWheelDelta
+      && Math.sign(state.baiduWheelDelta) !== Math.sign(delta)
+    ) {
+      state.baiduWheelDelta = 0;
+    }
+    state.baiduWheelDelta = Math.max(
+      -240,
+      Math.min(240, state.baiduWheelDelta + delta),
+    );
+    if (state.baiduWheelResetTimer) {
+      window.clearTimeout(state.baiduWheelResetTimer);
+    }
+    state.baiduWheelResetTimer = window.setTimeout(() => {
+      state.baiduWheelResetTimer = null;
+      state.baiduWheelDelta = 0;
+    }, BAIDU_WHEEL_IDLE_MS);
+
+    if (Math.abs(state.baiduWheelDelta) < BAIDU_WHEEL_ZOOM_THRESHOLD) return;
+    const eventTime = Number(event.timeStamp);
+    const now = Number.isFinite(eventTime) ? eventTime : Date.now();
+    if (now - state.baiduWheelLastStepAt < BAIDU_WHEEL_THROTTLE_MS) return;
+    const direction = state.baiduWheelDelta < 0 ? 1 : -1;
+    state.baiduWheelDelta = 0;
+    state.baiduWheelLastStepAt = now;
+    changeBaiduZoom(direction);
+  }
+
   function fitBaiduMap(points) {
     if (!state.baiduMapInstance?.setViewport) return;
     state.baiduProgrammaticZoomEvents += 1;
@@ -608,6 +673,8 @@
   }
 
   function resetChinaMap() {
+    resetBaiduWheelGesture();
+    state.baiduWheelLastStepAt = Number.NEGATIVE_INFINITY;
     cancelBaiduOverviewZoom();
     cancelBaiduGeocode();
     clearBaiduMarker();
@@ -759,12 +826,16 @@
     try {
       state.baiduMapInstance = new BMap.Map(els.baiduMap);
       state.baiduMapInstance.addEventListener?.("zoomend", scheduleBaiduOverviewZoomSync);
-      ["wheel", "pointerdown", "touchstart", "keydown"].forEach((eventName) => {
+      els.baiduMap.addEventListener("wheel", handleBaiduWheel, {
+        capture: true,
+        passive: false,
+      });
+      ["pointerdown", "touchstart", "keydown"].forEach((eventName) => {
         els.baiduMap.addEventListener(eventName, noteBaiduUserViewportIntent, true);
       });
       centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
-      // Baidu's current JSAPI guide uses the explicit flag to activate native wheel handling.
-      state.baiduMapInstance.enableScrollWheelZoom?.(true);
+      // The native Baidu wheel listener can fall through and scroll the host page.
+      state.baiduMapInstance.disableScrollWheelZoom?.();
       state.baiduMapInstance.enableDoubleClickZoom?.();
       state.baiduMapInstance.enablePinchToZoom?.();
       state.baiduMapInstance.enableKeyboard?.();

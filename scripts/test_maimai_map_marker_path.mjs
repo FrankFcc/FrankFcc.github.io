@@ -19,6 +19,9 @@ const vendorSource = fs.readFileSync(
 
 assert.match(shortcodeSource, /data-provider="baidu"/);
 assert.match(shortcodeSource, /data-baidu-map/);
+assert.match(shortcodeSource, /data-baidu-zoom-controls/);
+assert.match(shortcodeSource, /data-baidu-zoom-in/);
+assert.match(shortcodeSource, /data-baidu-zoom-out/);
 assert.match(shortcodeSource, /data-china-map-back/);
 assert.match(shortcodeSource, /data-china-map-overview/);
 assert.match(
@@ -287,6 +290,13 @@ class FakeListElement extends FakeElement {
   }
 }
 
+const baiduZoomControlsElement = new FakeElement();
+baiduZoomControlsElement.hidden = true;
+const baiduZoomInElement = new FakeElement();
+baiduZoomInElement.disabled = true;
+const baiduZoomOutElement = new FakeElement();
+baiduZoomOutElement.disabled = true;
+
 const elements = {
   "[data-dataset-title]": new FakeElement(),
   "[data-stat-total]": new FakeElement(),
@@ -300,6 +310,9 @@ const elements = {
   "[data-map]": new FakeElement(),
   "[data-china-map]": new FakeElement(),
   "[data-baidu-map]": new FakeElement(),
+  "[data-baidu-zoom-controls]": baiduZoomControlsElement,
+  "[data-baidu-zoom-in]": baiduZoomInElement,
+  "[data-baidu-zoom-out]": baiduZoomOutElement,
   "[data-china-map-empty]": new FakeElement(),
   "[data-china-map-empty-title]": new FakeElement(),
   "[data-china-map-empty-message]": new FakeElement(),
@@ -549,6 +562,12 @@ class FakeBaiduMap {
     this.clearOverlaysCalls = 0;
     this.checkResizeCalls = 0;
     this.scrollWheelEnabled = false;
+    this.pinchToZoomEnabled = false;
+    this.keyboardEnabled = false;
+    this.continuousZoomEnabled = false;
+    this.doubleClickZoomEnabled = false;
+    this.zoomInCalls = 0;
+    this.zoomOutCalls = 0;
     this.listeners = {};
     baiduMapInstance = this;
   }
@@ -562,6 +581,34 @@ class FakeBaiduMap {
 
   enableScrollWheelZoom() {
     this.scrollWheelEnabled = true;
+  }
+
+  enablePinchToZoom() {
+    this.pinchToZoomEnabled = true;
+  }
+
+  enableKeyboard() {
+    this.keyboardEnabled = true;
+  }
+
+  enableContinuousZoom() {
+    this.continuousZoomEnabled = true;
+  }
+
+  enableDoubleClickZoom() {
+    this.doubleClickZoomEnabled = true;
+  }
+
+  zoomIn() {
+    this.zoomInCalls += 1;
+    this.zoom += 1;
+    this.emitZoomEnd();
+  }
+
+  zoomOut() {
+    this.zoomOutCalls += 1;
+    this.zoom -= 1;
+    this.emitZoomEnd();
   }
 
   addEventListener(type, callback) {
@@ -1087,6 +1134,15 @@ assert.equal(baiduMapCount, 1);
 assert.equal(managedLongTimers.size, 0);
 assert.equal(baiduMapInstance.element, elements["[data-baidu-map]"]);
 assert.equal(baiduMapInstance.scrollWheelEnabled, true);
+assert.equal(baiduMapInstance.pinchToZoomEnabled, true);
+assert.equal(baiduMapInstance.keyboardEnabled, true);
+assert.equal(baiduMapInstance.continuousZoomEnabled, true);
+assert.equal(baiduMapInstance.doubleClickZoomEnabled, true);
+assert.equal(elements["[data-baidu-zoom-controls]"].hidden, false);
+assert.equal(elements["[data-baidu-zoom-in]"].disabled, false);
+assert.equal(elements["[data-baidu-zoom-out]"].disabled, false);
+assert.equal(typeof elements["[data-baidu-zoom-in]"].listeners.click, "function");
+assert.equal(typeof elements["[data-baidu-zoom-out]"].listeners.click, "function");
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 assert.equal(baiduMapInstance.viewportPoints.length, chinaSupportFixture.mapGroups.length);
 assert.deepEqual(
@@ -1105,14 +1161,43 @@ assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
 
 const geocodesBeforeAutomaticZoom = baiduGeocodeCalls.length;
 const weishiOverviewPoint = new FakeBaiduPoint(114.193082, 34.411437);
-baiduMapInstance.simulateUserZoom(7, weishiOverviewPoint);
+baiduMapInstance.center = weishiOverviewPoint;
+const clickBaiduZoomIn = () => {
+  elements["[data-baidu-zoom-in]"].listeners.click({
+    type: "click",
+    currentTarget: elements["[data-baidu-zoom-in]"],
+    preventDefault() {},
+    stopPropagation() {},
+  });
+};
+const clickBaiduZoomOut = () => {
+  elements["[data-baidu-zoom-out]"].listeners.click({
+    type: "click",
+    currentTarget: elements["[data-baidu-zoom-out]"],
+    preventDefault() {},
+    stopPropagation() {},
+  });
+};
+clickBaiduZoomIn();
+assert.equal(baiduMapInstance.zoom, 6);
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.match(elements["[data-status]"].textContent, /province overview markers/i);
+clickBaiduZoomIn();
+assert.equal(baiduMapInstance.zoom, 7);
 assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
 assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
 
-baiduMapInstance.simulateUserZoom(11, weishiOverviewPoint);
+clickBaiduZoomIn();
+clickBaiduZoomIn();
+clickBaiduZoomIn();
+assert.equal(baiduMapInstance.zoom, 10);
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+clickBaiduZoomIn();
+assert.equal(baiduMapInstance.zoom, 11);
 assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(
@@ -1122,21 +1207,28 @@ assert.equal(
 assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
 
-baiduMapInstance.simulateUserZoom(10, weishiOverviewPoint);
+clickBaiduZoomOut();
+assert.equal(baiduMapInstance.zoom, 10);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
 
-baiduMapInstance.simulateUserZoom(9, weishiOverviewPoint);
+clickBaiduZoomOut();
+assert.equal(baiduMapInstance.zoom, 9);
 assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 
-baiduMapInstance.simulateUserZoom(6, weishiOverviewPoint);
+clickBaiduZoomOut();
+clickBaiduZoomOut();
+clickBaiduZoomOut();
+assert.equal(baiduMapInstance.zoom, 6);
 assert.equal(elements["[data-subregion]"].value, "");
 assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+assert.equal(baiduMapInstance.zoomInCalls, 6);
+assert.equal(baiduMapInstance.zoomOutCalls, 5);
 assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
 
 baiduMapInstance.simulateUserZoom(11, weishiOverviewPoint);
@@ -1431,6 +1523,13 @@ assert.equal(
   "1,096 Google Maps markers loaded from the official coordinate dataset. 15 filtered locations do not include official coordinates and remain list-only.",
 );
 
+const missingKeyBaiduZoomControls = new FakeElement();
+missingKeyBaiduZoomControls.hidden = true;
+const missingKeyBaiduZoomIn = new FakeElement();
+missingKeyBaiduZoomIn.disabled = true;
+const missingKeyBaiduZoomOut = new FakeElement();
+missingKeyBaiduZoomOut.disabled = true;
+
 const missingKeyElements = {
   "[data-dataset-title]": new FakeElement(),
   "[data-stat-total]": new FakeElement(),
@@ -1444,6 +1543,9 @@ const missingKeyElements = {
   "[data-map]": new FakeElement(),
   "[data-china-map]": new FakeElement(),
   "[data-baidu-map]": new FakeElement(),
+  "[data-baidu-zoom-controls]": missingKeyBaiduZoomControls,
+  "[data-baidu-zoom-in]": missingKeyBaiduZoomIn,
+  "[data-baidu-zoom-out]": missingKeyBaiduZoomOut,
   "[data-china-map-empty]": new FakeElement(),
   "[data-china-map-empty-title]": new FakeElement(),
   "[data-china-map-empty-message]": new FakeElement(),
@@ -1541,6 +1643,9 @@ assert.equal(missingKeyElements["[data-visible-count]"].textContent, "3 location
 assert.equal(missingKeyElements["[data-china-map]"].hidden, false);
 assert.equal(missingKeyScripts.length, 0);
 assert.equal(baiduMapCount, baiduMapCountBeforeMissingKey);
+assert.equal(missingKeyElements["[data-baidu-zoom-controls]"].hidden, true);
+assert.equal(missingKeyElements["[data-baidu-zoom-in]"].disabled, true);
+assert.equal(missingKeyElements["[data-baidu-zoom-out]"].disabled, true);
 assert.match(missingKeyElements["[data-status]"].textContent, /Baidu/i);
 assert.match(missingKeyElements["[data-status]"].textContent, /AK|key|external|unavailable/i);
 const missingKeyFirstItem = missingKeyElements["[data-list]"].items.find(

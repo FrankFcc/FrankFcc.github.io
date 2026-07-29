@@ -1102,6 +1102,56 @@ body {
   width: 100%;
 }
 
+.maimai-baidu-zoom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+
+.maimai-baidu-zoom-controls[hidden] {
+  display: none;
+}
+
+.maimai-baidu-zoom-controls button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(37, 111, 156, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(22, 34, 51, 0.22);
+  color: #26384b;
+  cursor: pointer;
+  display: flex;
+  font-size: 1.45rem;
+  font-weight: 700;
+  height: 2.75rem;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  touch-action: manipulation;
+  width: 2.75rem;
+}
+
+.maimai-baidu-zoom-controls button:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--cf-accent);
+  color: var(--cf-accent);
+}
+
+.maimai-baidu-zoom-controls button:focus-visible {
+  outline: 3px solid rgba(37, 111, 156, 0.4);
+  outline-offset: 2px;
+}
+
+.maimai-baidu-zoom-controls button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .maimai-china-map-banner[hidden],
 .maimai-china-map-empty[hidden] {
   display: none;
@@ -1519,6 +1569,18 @@ body.dark .maimai-china-map-banner strong {
 
 body.dark .maimai-china-map-banner span {
   color: var(--cf-ink);
+}
+
+body.dark .maimai-baidu-zoom-controls button {
+  background: rgba(16, 23, 34, 0.94);
+  border-color: rgba(140, 205, 242, 0.42);
+  color: var(--cf-ink);
+}
+
+body.dark .maimai-baidu-zoom-controls button:hover:not(:disabled) {
+  background: #18283a;
+  border-color: var(--cf-accent);
+  color: var(--cf-accent);
 }
 
 body.dark .network-icon li a:hover,

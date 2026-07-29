@@ -31,6 +31,9 @@
     map: root.querySelector("[data-map]"),
     chinaMap: root.querySelector("[data-china-map]"),
     baiduMap: root.querySelector("[data-baidu-map]"),
+    baiduZoomControls: root.querySelector("[data-baidu-zoom-controls]"),
+    baiduZoomIn: root.querySelector("[data-baidu-zoom-in]"),
+    baiduZoomOut: root.querySelector("[data-baidu-zoom-out]"),
     chinaMapEmpty: root.querySelector("[data-china-map-empty]"),
     chinaMapEmptyTitle: root.querySelector("[data-china-map-empty-title]"),
     chinaMapEmptyMessage: root.querySelector("[data-china-map-empty-message]"),
@@ -562,6 +565,35 @@
     state.baiduMapInstance.centerAndZoom(point, zoom);
   }
 
+  function updateBaiduZoomControls() {
+    const enabled = Boolean(
+      usesChinaMap()
+      && state.baiduReady
+      && state.baiduMapInstance,
+    );
+    if (els.baiduZoomControls) els.baiduZoomControls.hidden = !enabled;
+    if (els.baiduZoomIn) els.baiduZoomIn.disabled = !enabled;
+    if (els.baiduZoomOut) els.baiduZoomOut.disabled = !enabled;
+  }
+
+  function changeBaiduZoom(direction) {
+    const map = state.baiduMapInstance;
+    if (!usesChinaMap() || !state.baiduReady || !map) return;
+    noteBaiduUserViewportIntent();
+    if (direction > 0 && typeof map.zoomIn === "function") {
+      map.zoomIn();
+      return;
+    }
+    if (direction < 0 && typeof map.zoomOut === "function") {
+      map.zoomOut();
+      return;
+    }
+    const currentZoom = Number(map.getZoom?.());
+    if (Number.isFinite(currentZoom) && typeof map.setZoom === "function") {
+      map.setZoom(currentZoom + (direction > 0 ? 1 : -1));
+    }
+  }
+
   function fitBaiduMap(points) {
     if (!state.baiduMapInstance?.setViewport) return;
     state.baiduProgrammaticZoomEvents += 1;
@@ -581,13 +613,14 @@
     clearBaiduMarker();
     clearBaiduOverviewMarkers();
     els.chinaMap?.classList.toggle("is-loaded", state.baiduReady);
+    updateBaiduZoomControls();
     if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = state.baiduReady;
     if (els.chinaMapBanner) els.chinaMapBanner.hidden = true;
     if (els.chinaMapBack) els.chinaMapBack.hidden = true;
     if (els.chinaMapOverview) els.chinaMapOverview.hidden = true;
     if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
     setChinaMapMessage(
-      "Zoom in to expand provinces into cities and districts, or select a marker directly. "
+      "Use +/−, the mouse wheel, or pinch to expand provinces into cities and districts. "
       + "Select a store name for one exact marker.",
     );
 
@@ -730,11 +763,16 @@
         els.baiduMap.addEventListener(eventName, noteBaiduUserViewportIntent, true);
       });
       centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
-      state.baiduMapInstance.enableScrollWheelZoom(true);
+      state.baiduMapInstance.enableScrollWheelZoom?.();
+      state.baiduMapInstance.enableDoubleClickZoom?.();
+      state.baiduMapInstance.enablePinchToZoom?.();
+      state.baiduMapInstance.enableKeyboard?.();
+      state.baiduMapInstance.enableContinuousZoom?.();
       state.baiduGeocoder = new BMap.Geocoder();
       state.baiduReady = true;
       state.baiduLoadFailed = false;
       els.chinaMap?.classList.add("is-loaded");
+      updateBaiduZoomControls();
       if (els.chinaMapEmpty) els.chinaMapEmpty.hidden = true;
       if (usesChinaMap()) {
         renderBaiduOverviewMarkers();
@@ -848,7 +886,7 @@
     if (state.chinaOverviewLevel === "province") {
       setChinaMapMessage(
         `Showing ${markerCount.toLocaleString()} province ${markerWord}. `
-        + `Zoom to level ${CHINA_CITY_ZOOM} near one, or select it, to show its city markers.`,
+        + `Use + to zoom to level ${CHINA_CITY_ZOOM} near one, or select it, to show its city markers.`,
       );
       return;
     }
@@ -856,7 +894,7 @@
       const province = chinaProvinceRegion();
       setChinaMapMessage(
         `Showing ${markerCount.toLocaleString()} city ${markerWord} in `
-        + `${province?.name || state.subregion}. Zoom to level ${CHINA_DISTRICT_ZOOM} `
+        + `${province?.name || state.subregion}. Use + to zoom to level ${CHINA_DISTRICT_ZOOM} `
         + "near one, or select it, to show district markers.",
       );
       return;
@@ -2050,6 +2088,8 @@
     });
     els.chinaMapBack?.addEventListener("click", showPreviousChinaOverview);
     els.chinaMapOverview?.addEventListener("click", showChinaProvinceOverview);
+    els.baiduZoomIn?.addEventListener("click", () => changeBaiduZoom(1));
+    els.baiduZoomOut?.addEventListener("click", () => changeBaiduZoom(-1));
   }
 
   bindEvents();

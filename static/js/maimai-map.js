@@ -77,6 +77,9 @@
     baiduPoint: null,
     baiduOverviewMarkers: new Map(),
     baiduOverviewInfo: null,
+    baiduZoomToken: 0,
+    baiduPreserveViewport: false,
+    baiduProgrammaticZoomEvents: 0,
     baiduReady: false,
     baiduRequested: false,
     baiduLoading: false,
@@ -97,6 +100,10 @@
 
   const BAIDU_HOME_URL = "https://map.baidu.com/";
   const BAIDU_URI_SOURCE = "webapp.frankfcc.maimai";
+  const CHINA_CITY_ZOOM = 7;
+  const CHINA_DISTRICT_ZOOM = 11;
+  const CHINA_PROVINCE_MAX_ZOOM = 6;
+  const CHINA_CITY_MAX_ZOOM = 9;
   let searchTimer = null;
 
   function getApiKey() {
@@ -540,6 +547,27 @@
     state.baiduPendingLocationId = null;
   }
 
+  function cancelBaiduOverviewZoom() {
+    state.baiduZoomToken += 1;
+  }
+
+  function noteBaiduUserViewportIntent() {
+    state.baiduProgrammaticZoomEvents = 0;
+    cancelBaiduOverviewZoom();
+  }
+
+  function centerBaiduMap(point, zoom) {
+    if (!state.baiduMapInstance) return;
+    state.baiduProgrammaticZoomEvents += 1;
+    state.baiduMapInstance.centerAndZoom(point, zoom);
+  }
+
+  function fitBaiduMap(points) {
+    if (!state.baiduMapInstance?.setViewport) return;
+    state.baiduProgrammaticZoomEvents += 1;
+    state.baiduMapInstance.setViewport(points, { margins: [48, 48, 48, 48] });
+  }
+
   function resetChinaHierarchy() {
     state.chinaOverviewLevel = "province";
     state.chinaProvinceKey = "";
@@ -548,6 +576,7 @@
   }
 
   function resetChinaMap() {
+    cancelBaiduOverviewZoom();
     cancelBaiduGeocode();
     clearBaiduMarker();
     clearBaiduOverviewMarkers();
@@ -558,7 +587,7 @@
     if (els.chinaMapOverview) els.chinaMapOverview.hidden = true;
     if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
     setChinaMapMessage(
-      "Select a province, then a city, then a district marker. "
+      "Zoom in to expand provinces into cities and districts, or select a marker directly. "
       + "Select a store name for one exact marker.",
     );
 
@@ -696,7 +725,11 @@
     }
     try {
       state.baiduMapInstance = new BMap.Map(els.baiduMap);
-      state.baiduMapInstance.centerAndZoom(new BMap.Point(104.2, 35.9), 5);
+      state.baiduMapInstance.addEventListener?.("zoomend", scheduleBaiduOverviewZoomSync);
+      ["wheel", "pointerdown", "touchstart", "keydown"].forEach((eventName) => {
+        els.baiduMap.addEventListener(eventName, noteBaiduUserViewportIntent, true);
+      });
+      centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
       state.baiduMapInstance.enableScrollWheelZoom(true);
       state.baiduGeocoder = new BMap.Geocoder();
       state.baiduReady = true;
@@ -815,7 +848,7 @@
     if (state.chinaOverviewLevel === "province") {
       setChinaMapMessage(
         `Showing ${markerCount.toLocaleString()} province ${markerWord}. `
-        + "Select one to show its city markers.",
+        + `Zoom to level ${CHINA_CITY_ZOOM} near one, or select it, to show its city markers.`,
       );
       return;
     }
@@ -823,7 +856,8 @@
       const province = chinaProvinceRegion();
       setChinaMapMessage(
         `Showing ${markerCount.toLocaleString()} city ${markerWord} in `
-        + `${province?.name || state.subregion}. Select one to show district markers.`,
+        + `${province?.name || state.subregion}. Zoom to level ${CHINA_DISTRICT_ZOOM} `
+        + "near one, or select it, to show district markers.",
       );
       return;
     }
@@ -838,8 +872,170 @@
     }
     setChinaMapMessage(
       `Showing ${markerCount.toLocaleString()} district ${markerWord} in `
-      + `${city?.name || "the selected city"}. Select a district to filter the store list.`,
+      + `${city?.name || "the selected city"}. Zoom out for cities, or select a district `
+      + "to filter the store list.",
     );
+  }
+
+  function baiduOverviewDistanceSquared(center, point) {
+    const meanLatitude = ((center.lat + point.lat) / 2) * (Math.PI / 180);
+    const dx = (center.lng - point.lng) * Math.cos(meanLatitude);
+    const dy = center.lat - point.lat;
+    return (dx * dx) + (dy * dy);
+  }
+
+  function chinaOverviewNavigationPoints(location) {
+    const points = [];
+    const addPoint = (region) => {
+      if (hasCoordinates(region)) points.push(region);
+    };
+    if (location.overviewLevel === "province") {
+      const province = chinaProvinceRegion(location.key);
+      (province?.cities || []).forEach((city) => {
+        const districts = (city.districts || []).filter(hasCoordinates);
+        if (districts.length) {
+          points.push(...districts);
+        } else {
+          addPoint(city);
+        }
+      });
+      if (!points.length) addPoint(province);
+    } else if (location.overviewLevel === "city") {
+      const city = chinaCityRegion(location.key);
+      const districts = (city?.districts || []).filter(hasCoordinates);
+      if (districts.length) {
+        points.push(...districts);
+      } else {
+        addPoint(city);
+      }
+    }
+    if (!points.length) addPoint(location);
+    return points;
+  }
+
+  function baiduBoundsContainPoint(bounds, point) {
+    if (!bounds) return true;
+    if (typeof bounds.containsPoint === "function") {
+      return bounds.containsPoint(new BMap.Point(point.lng, point.lat));
+    }
+    const southWest = bounds.getSouthWest?.();
+    const northEast = bounds.getNorthEast?.();
+    if (!southWest || !northEast) return true;
+    return point.lat >= southWest.lat
+      && point.lat <= northEast.lat
+      && point.lng >= southWest.lng
+      && point.lng <= northEast.lng;
+  }
+
+  function nearestBaiduOverviewLocation() {
+    const center = state.baiduMapInstance?.getCenter?.();
+    if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return null;
+    const bounds = state.baiduMapInstance.getBounds?.();
+    let nearest = null;
+    state.mapItems.forEach((location) => {
+      if (!location.aggregate || location.unmatched) return;
+      const navigationPoints = chinaOverviewNavigationPoints(location);
+      const nearbyPoints = bounds
+        ? navigationPoints.filter((point) => baiduBoundsContainPoint(bounds, point))
+        : navigationPoints;
+      if (!nearbyPoints.length) return;
+      const distance = nearbyPoints.reduce(
+        (best, point) => Math.min(best, baiduOverviewDistanceSquared(center, point)),
+        Number.POSITIVE_INFINITY,
+      );
+      if (!nearest || distance < nearest.distance) nearest = { location, distance };
+    });
+    return nearest?.location || null;
+  }
+
+  function applyChinaFiltersPreservingViewport() {
+    state.baiduPreserveViewport = true;
+    try {
+      applyFilters();
+    } finally {
+      state.baiduPreserveViewport = false;
+    }
+  }
+
+  function restoreChinaProvinceOverviewAtCurrentViewport() {
+    state.subregion = "";
+    resetChinaHierarchy();
+    els.subregion.value = "";
+    applyChinaFiltersPreservingViewport();
+  }
+
+  function restoreChinaCityOverviewAtCurrentViewport() {
+    state.chinaOverviewLevel = "city";
+    state.chinaCityKey = "";
+    state.chinaDistrictKey = "";
+    applyChinaFiltersPreservingViewport();
+  }
+
+  function syncBaiduOverviewToZoom() {
+    if (
+      !usesChinaMap()
+      || !state.baiduReady
+      || !state.baiduMapInstance
+      || state.payload?.mapMode !== "region-summary"
+      || state.selectedLocationId
+      || state.baiduMarker
+      || state.baiduGeocoding
+      || state.baiduPendingLocationId
+    ) return;
+
+    const zoom = Number(state.baiduMapInstance.getZoom?.());
+    if (!Number.isFinite(zoom)) return;
+
+    if (zoom <= CHINA_PROVINCE_MAX_ZOOM) {
+      if (state.chinaOverviewLevel !== "province" || state.chinaProvinceKey) {
+        restoreChinaProvinceOverviewAtCurrentViewport();
+      }
+      return;
+    }
+    if (
+      state.chinaOverviewLevel === "district"
+      && zoom <= CHINA_CITY_MAX_ZOOM
+    ) {
+      restoreChinaCityOverviewAtCurrentViewport();
+      return;
+    }
+
+    if (
+      state.chinaOverviewLevel === "province"
+      && zoom >= CHINA_CITY_ZOOM
+    ) {
+      const province = nearestBaiduOverviewLocation();
+      if (!province) return;
+      selectBaiduOverview(province, { automatic: true });
+      if (zoom > CHINA_CITY_MAX_ZOOM) {
+        centerBaiduMap(state.baiduMapInstance.getCenter(), CHINA_CITY_MAX_ZOOM);
+      }
+      return;
+    }
+    if (
+      state.chinaOverviewLevel === "city"
+      && zoom >= CHINA_DISTRICT_ZOOM
+    ) {
+      const city = nearestBaiduOverviewLocation();
+      if (city) selectBaiduOverview(city, { automatic: true });
+    }
+  }
+
+  function scheduleBaiduOverviewZoomSync() {
+    if (state.baiduProgrammaticZoomEvents > 0) {
+      state.baiduProgrammaticZoomEvents -= 1;
+      cancelBaiduOverviewZoom();
+      return;
+    }
+    const token = ++state.baiduZoomToken;
+    const sequence = state.loadSequence;
+    window.requestAnimationFrame(() => {
+      if (
+        token !== state.baiduZoomToken
+        || sequence !== state.loadSequence
+      ) return;
+      syncBaiduOverviewToZoom();
+    });
   }
 
   function openBaiduOverviewInfo(location) {
@@ -856,7 +1052,8 @@
     state.baiduMapInstance.openInfoWindow(info, overview.point);
   }
 
-  function selectBaiduOverview(location) {
+  function selectBaiduOverview(location, { automatic = false } = {}) {
+    if (!automatic) cancelBaiduOverviewZoom();
     cancelBaiduGeocode();
     clearBaiduMarker();
     markSelectedLocation(null);
@@ -883,7 +1080,16 @@
     } else {
       state.chinaDistrictKey = location.key;
     }
-    applyFilters();
+    applyChinaFiltersPreservingViewport();
+    if (!automatic && hasCoordinates(location) && state.baiduMapInstance) {
+      const zoom = location.overviewLevel === "province"
+        ? 8
+        : 12;
+      centerBaiduMap(
+        new BMap.Point(location.lng, location.lat),
+        zoom,
+      );
+    }
     if (location.overviewLevel === "district") openBaiduOverviewInfo(location);
   }
 
@@ -914,15 +1120,17 @@
       points.push(point);
     });
 
-    if (points.length === 1) {
-      const zoom = state.chinaOverviewLevel === "province"
-        ? 7
-        : (state.chinaOverviewLevel === "city" ? 9 : 12);
-      state.baiduMapInstance.centerAndZoom(points[0], zoom);
-    } else if (points.length > 1 && state.baiduMapInstance.setViewport) {
-      state.baiduMapInstance.setViewport(points, { margins: [48, 48, 48, 48] });
-    } else if (points.length > 1) {
-      state.baiduMapInstance.centerAndZoom(new BMap.Point(104.2, 35.9), 5);
+    if (!state.baiduPreserveViewport) {
+      if (points.length === 1) {
+        const zoom = state.chinaOverviewLevel === "province"
+          ? 7
+          : (state.chinaOverviewLevel === "city" ? 9 : 12);
+        centerBaiduMap(points[0], zoom);
+      } else if (points.length > 1 && state.baiduMapInstance.setViewport) {
+        fitBaiduMap(points);
+      } else if (points.length > 1) {
+        centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
+      }
     }
     setChinaOverviewMessage();
     updateChinaNavigation();
@@ -930,6 +1138,7 @@
 
   function showChinaProvinceOverview() {
     if (!usesChinaMap()) return;
+    cancelBaiduOverviewZoom();
     cancelBaiduGeocode();
     clearBaiduMarker();
     markSelectedLocation(null);
@@ -940,10 +1149,14 @@
     els.subregion.value = "";
     if (els.chinaMapExternal) els.chinaMapExternal.href = BAIDU_HOME_URL;
     applyFilters();
+    if (state.baiduReady && state.baiduMapInstance) {
+      centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
+    }
   }
 
   function showPreviousChinaOverview() {
     if (!usesChinaMap()) return;
+    cancelBaiduOverviewZoom();
     cancelBaiduGeocode();
     clearBaiduMarker();
     if (state.selectedLocationId) {
@@ -972,7 +1185,7 @@
       && state.baiduMarker
       && state.baiduPoint
     ) {
-      state.baiduMapInstance.centerAndZoom(state.baiduPoint, 17);
+      centerBaiduMap(state.baiduPoint, 17);
       if (state.baiduInfo) {
         state.baiduMapInstance.openInfoWindow(state.baiduInfo, state.baiduPoint);
       }
@@ -1037,7 +1250,7 @@
         </div>
       `, { width: 280 });
       state.baiduMapInstance.addOverlay(marker);
-      state.baiduMapInstance.centerAndZoom(point, 17);
+      centerBaiduMap(point, 17);
       state.baiduMapInstance.openInfoWindow(info, point);
       marker.addEventListener?.("click", () => {
         if (state.baiduMarker === marker && usesChinaMap()) {
@@ -1056,6 +1269,7 @@
   }
 
   function focusChinaLocation(location) {
+    cancelBaiduOverviewZoom();
     const url = baiduSearchUrl(location);
     const sameSelection = state.selectedLocationId === location.id;
     markSelectedLocation(location.id);
@@ -1208,11 +1422,11 @@
           ? ` ${listOnlyCount.toLocaleString()} locations remain list-only at this level.`
           : "";
         const nextStep = level === "province"
-          ? "Select a province marker for its cities"
+          ? `Zoom to level ${CHINA_CITY_ZOOM} near a province, or select it, for its cities`
           : (
             level === "city"
-              ? "Select a city marker for its districts"
-              : "Select a district marker to filter the store list"
+              ? `Zoom to level ${CHINA_DISTRICT_ZOOM} near a city, or select it, for its districts`
+              : "Zoom out for cities, or select a district to filter the store list"
           );
         setStatus(
           `${state.filtered.length.toLocaleString()} live official locations summarized into `
@@ -1800,6 +2014,7 @@
     });
     els.subregion.addEventListener("change", () => {
       if (usesChinaMap()) {
+        cancelBaiduOverviewZoom();
         cancelBaiduGeocode();
         clearBaiduMarker();
         markSelectedLocation(null);
@@ -1814,6 +2029,19 @@
         resetChinaHierarchy();
       }
       applyFilters();
+      if (usesChinaMap() && state.baiduReady && state.baiduMapInstance) {
+        if (state.subregion) {
+          const province = chinaProvinceRegion();
+          if (hasCoordinates(province)) {
+            centerBaiduMap(
+              new BMap.Point(province.lng, province.lat),
+              8,
+            );
+          }
+        } else {
+          centerBaiduMap(new BMap.Point(104.2, 35.9), 5);
+        }
+      }
     });
     els.list.addEventListener("click", (event) => {
       const button = event.target.closest("[data-focus]");

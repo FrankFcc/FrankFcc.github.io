@@ -549,6 +549,7 @@ class FakeBaiduMap {
     this.clearOverlaysCalls = 0;
     this.checkResizeCalls = 0;
     this.scrollWheelEnabled = false;
+    this.listeners = {};
     baiduMapInstance = this;
   }
 
@@ -556,10 +557,47 @@ class FakeBaiduMap {
     this.center = point;
     this.zoom = zoom;
     this.centerAndZoomCalls.push({ point, zoom });
+    this.emitZoomEnd();
   }
 
   enableScrollWheelZoom() {
     this.scrollWheelEnabled = true;
+  }
+
+  addEventListener(type, callback) {
+    if (!this.listeners[type]) this.listeners[type] = [];
+    this.listeners[type].push(callback);
+  }
+
+  getCenter() {
+    return this.center;
+  }
+
+  getZoom() {
+    return this.zoom;
+  }
+
+  getBounds() {
+    const halfSpan = 20 / Math.max(this.zoom || 1, 1);
+    return {
+      containsPoint: (point) => (
+        Math.abs(point.lat - this.center.lat) <= halfSpan
+        && Math.abs(point.lng - this.center.lng) <= halfSpan
+      ),
+    };
+  }
+
+  emitZoomEnd() {
+    (this.listeners.zoomend || []).forEach((callback) => {
+      callback.call(this, { type: "zoomend", target: this });
+    });
+  }
+
+  simulateUserZoom(zoom, center = this.center) {
+    this.element.listeners.wheel?.({ type: "wheel", target: this.element });
+    this.zoom = zoom;
+    this.center = center;
+    this.emitZoomEnd();
   }
 
   checkResize() {
@@ -569,6 +607,7 @@ class FakeBaiduMap {
   setViewport(points, options) {
     this.viewportPoints = [...points];
     this.viewportOptions = options;
+    this.emitZoomEnd();
   }
 
   clearOverlays() {
@@ -1062,6 +1101,52 @@ assert.deepEqual(
 assert.ok(baiduMapInstance.overlays.every((marker) => marker.label));
 assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(elements["[data-open-visible]"].textContent, "Open Baidu");
+assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
+
+const geocodesBeforeAutomaticZoom = baiduGeocodeCalls.length;
+const weishiOverviewPoint = new FakeBaiduPoint(114.193082, 34.411437);
+baiduMapInstance.simulateUserZoom(7, weishiOverviewPoint);
+assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
+assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+
+baiduMapInstance.simulateUserZoom(11, weishiOverviewPoint);
+assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(
+  baiduMapInstance.overlays[0].options.title,
+  `${chinaSupportFixture.regions[0].cities[0].districts[0].name}: 1 locations`,
+);
+assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+
+baiduMapInstance.simulateUserZoom(10, weishiOverviewPoint);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
+
+baiduMapInstance.simulateUserZoom(9, weishiOverviewPoint);
+assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+
+baiduMapInstance.simulateUserZoom(6, weishiOverviewPoint);
+assert.equal(elements["[data-subregion]"].value, "");
+assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
+assert.match(elements["[data-status]"].textContent, /province overview markers/i);
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
+assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
+
+baiduMapInstance.simulateUserZoom(11, weishiOverviewPoint);
+assert.equal(baiduMapInstance.zoom, 9);
+assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
+assert.equal(baiduMapInstance.overlays.length, 2);
+assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
+baiduMapInstance.simulateUserZoom(6, weishiOverviewPoint);
+assert.equal(elements["[data-subregion]"].value, "");
+assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 
 const zhejiangProvinceMarker = baiduMapInstance.overlays.find(
   (marker) => marker.options.title.startsWith("浙江:"),
@@ -1167,6 +1252,12 @@ assert.equal(
 );
 assert.equal(chinaFirstItem.classList.contains("is-selected"), true);
 assert.equal(chinaFirstItem.attributes["aria-current"], "true");
+
+baiduMapInstance.simulateUserZoom(6, selectedChinaPoint);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, false);
+assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
+assert.equal(baiduGeocodeCalls.length, 1);
 
 elements["[data-china-map-back]"].listeners.click();
 assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
@@ -1286,6 +1377,7 @@ datasetButtons[1].listeners.click();
 await settle();
 assert.equal(appendedScripts.length, 3);
 assert.equal(baiduMapCount, 1);
+assert.equal(baiduMapInstance.listeners.zoomend.length, 1);
 assert.equal(elements["[data-china-map]"].hidden, false);
 assert.ok(baiduMapInstance.checkResizeCalls > baiduResizeCallsBeforeReturn);
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);

@@ -408,6 +408,24 @@ const chinaRawFixture = [
     placeId: "5000",
   },
 ];
+const secondWeishiRawLocation = {
+  ...chinaRawFixture[0],
+  id: "2081921990512345091",
+  arcadeName: `${chinaRawFixture[0].arcadeName} 2`,
+  address: `${chinaRawFixture[0].address} 2`,
+  placeId: "5001",
+};
+chinaRawFixture.push(secondWeishiRawLocation);
+const activeDistrictRawLocations = [
+  chinaRawFixture[0],
+  secondWeishiRawLocation,
+];
+const activeDistrictLocationIds = activeDistrictRawLocations.map(
+  (location) => `cn-wahlap-${location.id}`,
+);
+const firstProvinceRawLocations = chinaRawFixture.filter(
+  (location) => location.province === chinaRawFixture[0].province,
+);
 const chinaSupportFixture = {
   source: {
     name: "Compact China hierarchy fixture",
@@ -528,12 +546,25 @@ let baiduOverviewMarkerCount = 0;
 let baiduExactMarkerCount = 0;
 let baiduInfoWindowInstance = null;
 let managedTimerSequence = 0;
+let managedNow = 1_000_000;
 const managedLongTimers = new Map();
+const managedRateTimers = new Map();
+
+class ManagedDate extends Date {
+  static now() {
+    return managedNow;
+  }
+}
 
 function managedSetTimeout(callback, delay = 0, ...args) {
   if (delay >= 10000) {
     const timer = { managed: true, id: ++managedTimerSequence };
     managedLongTimers.set(timer, { callback, delay, args });
+    return timer;
+  }
+  if (delay >= 250) {
+    const timer = { managedRate: true, id: ++managedTimerSequence };
+    managedRateTimers.set(timer, { callback, delay, args });
     return timer;
   }
   return setTimeout(callback, delay, ...args);
@@ -542,6 +573,10 @@ function managedSetTimeout(callback, delay = 0, ...args) {
 function managedClearTimeout(timer) {
   if (timer?.managed) {
     managedLongTimers.delete(timer);
+    return;
+  }
+  if (timer?.managedRate) {
+    managedRateTimers.delete(timer);
     return;
   }
   clearTimeout(timer);
@@ -553,6 +588,31 @@ function fireManagedLongTimer(delay) {
   const [timerId, timer] = match;
   managedLongTimers.delete(timerId);
   timer.callback(...timer.args);
+}
+
+function fireNextManagedRateTimer() {
+  const match = managedRateTimers.entries().next().value;
+  assert.ok(match, "missing managed rate-limit timer");
+  const [timerId, timer] = match;
+  managedRateTimers.delete(timerId);
+  managedNow += timer.delay;
+  timer.callback(...timer.args);
+}
+
+async function releaseRateLimitedGeocodes(expectedCallCount) {
+  let guard = 0;
+  while (baiduGeocodeCalls.length < expectedCallCount && guard < 50) {
+    await settle(2);
+    if (baiduGeocodeCalls.length >= expectedCallCount) break;
+    assert.ok(
+      managedRateTimers.size > 0,
+      `expected a rate-limit timer before geocode call ${expectedCallCount}`,
+    );
+    fireNextManagedRateTimer();
+    guard += 1;
+  }
+  await settle(2);
+  assert.equal(baiduGeocodeCalls.length, expectedCallCount);
 }
 
 class FakeBaiduPoint {
@@ -915,6 +975,7 @@ const windowObject = {
 
 const context = vm.createContext({
   console,
+  Date: ManagedDate,
   document: {
     querySelector(selector) {
       return selector === "[data-maimai-map]" ? root : null;
@@ -1083,11 +1144,18 @@ assert.equal(appendedScripts.length, 0);
 datasetButtons[1].listeners.click();
 await settle();
 assert.equal(elements["[data-dataset-title]"].textContent, "舞萌DX Mainland China");
-assert.equal(elements["[data-stat-total]"].textContent, "3 locations");
+assert.equal(
+  elements["[data-stat-total]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(elements["[data-stat-mapped]"].textContent, "2 province summaries");
 assert.equal(elements["[data-stat-areas]"].textContent, "2 provinces");
 assert.equal(clustererInstance.markers.length, 0);
-assert.ok(elements["[data-status]"].textContent.includes("3 live official locations"));
+assert.ok(
+  elements["[data-status]"].textContent.includes(
+    `${chinaRawFixture.length} live official locations`,
+  ),
+);
 assert.match(elements["[data-status]"].textContent, /province overview/i);
 assert.ok(elements["[data-list]"].innerHTML.includes("cn-wahlap-2081921990512345090"));
 assert.ok(elements["[data-list]"].innerHTML.includes("maimai-map-item-name"));
@@ -1242,7 +1310,10 @@ assert.match(elements["[data-status]"].textContent, /province overview markers/i
 clickBaiduZoomIn();
 assert.equal(baiduMapInstance.zoom, 7);
 assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
-assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${firstProvinceRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1255,11 +1326,15 @@ assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 clickBaiduZoomIn();
 assert.equal(baiduMapInstance.zoom, 11);
-assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${activeDistrictRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(
   baiduMapInstance.overlays[0].options.title,
-  `${chinaSupportFixture.regions[0].cities[0].districts[0].name}: 1 locations`,
+  `${chinaSupportFixture.regions[0].cities[0].districts[0].name}: `
+    + `${activeDistrictRawLocations.length} locations`,
 );
 assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1271,7 +1346,10 @@ assert.match(elements["[data-status]"].textContent, /1 district overview marker/
 
 clickBaiduZoomOut();
 assert.equal(baiduMapInstance.zoom, 9);
-assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${firstProvinceRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 
@@ -1280,7 +1358,10 @@ clickBaiduZoomOut();
 clickBaiduZoomOut();
 assert.equal(baiduMapInstance.zoom, 6);
 assert.equal(elements["[data-subregion]"].value, "");
-assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1377,7 +1458,10 @@ assert.equal(
 );
 assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 3);
 assert.equal(elements["[data-subregion]"].value, chinaRawFixture[0].province);
-assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${firstProvinceRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1401,7 +1485,10 @@ assert.equal(wheelIntoDistrict.defaultPrevented, true);
 assert.equal(wheelIntoDistrict.propagationStopped, true);
 assert.equal(baiduMapInstance.zoom, 11);
 assert.equal(baiduMapInstance.zoomInCalls, wheelZoomInCallsBefore + 8);
-assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${activeDistrictRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1411,7 +1498,10 @@ const wheelBackToCity = dispatchBaiduWheel(120);
 assert.equal(wheelBackToCity.defaultPrevented, true);
 assert.equal(wheelBackToCity.propagationStopped, true);
 assert.equal(baiduMapInstance.zoom, 9);
-assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${firstProvinceRawLocations.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 dispatchBaiduWheel(120);
@@ -1422,7 +1512,10 @@ assert.equal(wheelBackToProvince.propagationStopped, true);
 assert.equal(baiduMapInstance.zoom, 6);
 assert.equal(baiduMapInstance.zoomOutCalls, wheelZoomOutCallsBefore + 8);
 assert.equal(elements["[data-subregion]"].value, "");
-assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 assert.match(elements["[data-status]"].textContent, /province overview markers/i);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeAutomaticZoom);
@@ -1447,7 +1540,10 @@ assert.equal(baiduGeocodeCalls.length, geocodesBeforeYiwuInference);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(baiduMapInstance.overlays[0].options.title, "金华市: 1 locations");
 elements["[data-china-map-back]"].listeners.click();
-assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 
 const firstProvinceOverviewMarker = baiduMapInstance.overlays.find(
@@ -1458,12 +1554,15 @@ const provinceBadgeStyle = firstProvinceOverviewMarker.label.style;
 const geocodesBeforeProvinceSelection = baiduGeocodeCalls.length;
 firstProvinceOverviewMarker.listeners.click();
 assert.equal(elements["[data-subregion]"].value, "河南");
-assert.equal(elements["[data-visible-count]"].textContent, "2 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${firstProvinceRawLocations.length} locations`,
+);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeProvinceSelection);
 assert.equal(baiduMapInstance.overlays.length, 2);
 assert.ok(baiduMapInstance.overlays.every((marker) => marker.isOverview));
 const kaifengCityMarker = baiduMapInstance.overlays.find(
-  (marker) => marker.options.title === "开封市: 1 locations",
+  (marker) => marker.options.title === `开封市: ${activeDistrictRawLocations.length} locations`,
 );
 const zhengzhouCityMarker = baiduMapInstance.overlays.find(
   (marker) => marker.options.title === "郑州市: 1 locations",
@@ -1481,11 +1580,17 @@ assert.equal(clustererInstance.markers.length, 0);
 assert.match(elements["[data-status]"].textContent, /2 city overview markers/i);
 
 kaifengCityMarker.listeners.click();
-assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${activeDistrictRawLocations.length} locations`,
+);
 assert.equal(baiduGeocodeCalls.length, geocodesBeforeProvinceSelection);
 assert.equal(baiduMapInstance.overlays.length, 1);
 const weishiDistrictMarker = baiduMapInstance.overlays[0];
-assert.equal(weishiDistrictMarker.options.title, "尉氏县: 1 locations");
+assert.equal(
+  weishiDistrictMarker.options.title,
+  `尉氏县: ${activeDistrictRawLocations.length} locations`,
+);
 assert.equal(weishiDistrictMarker.isOverview, true);
 const districtBadgeStyle = weishiDistrictMarker.label.style;
 assert.equal(districtBadgeStyle.backgroundColor, "#3b7d5b");
@@ -1496,171 +1601,215 @@ assert.equal(elements["[data-china-map-back]"].textContent, "Back to cities");
 assert.match(elements["[data-status]"].textContent, /1 district overview marker/i);
 
 weishiDistrictMarker.listeners.click();
-assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
-assert.equal(baiduGeocodeCalls.length, geocodesBeforeProvinceSelection);
-assert.equal(baiduMapInstance.overlays.length, 1);
-assert.equal(baiduMapInstance.overlays[0].isOverview, true);
-assert.ok(baiduMapInstance.infoWindow.content.includes("尉氏县"));
-assert.equal(elements["[data-china-map-back]"].textContent, "All districts");
-
-const openedBeforeChinaFocus = openedUrls.length;
-const chinaFirstItem = elements["[data-list]"].items.find(
-  (item) => item.dataset.id === "cn-wahlap-2081921990512345090",
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${activeDistrictRawLocations.length} locations`,
 );
-assert.ok(chinaFirstItem);
-elements["[data-list]"].listeners.click({
-  target: chinaFirstItem.nameButton,
-});
-assert.equal(openedUrls.length, openedBeforeChinaFocus);
-assert.equal(baiduGeocodeCalls.length, 1);
-assert.equal(baiduGeocodeCalls[0].address, chinaRawFixture[0].address);
-assert.equal(baiduGeocodeCalls[0].city, "开封市");
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeProvinceSelection + 1);
+assert.equal(
+  baiduGeocodeCalls[geocodesBeforeProvinceSelection].address,
+  activeDistrictRawLocations[0].address,
+);
+assert.equal(baiduGeocodeCalls[geocodesBeforeProvinceSelection].city, "开封市");
 assert.equal(baiduMapInstance.overlays.length, 0);
-assert.equal(elements["[data-china-map-back]"].hidden, false);
-assert.equal(elements["[data-china-map-back]"].textContent, "Back to overview");
-assert.equal(elements["[data-china-map-overview]"].hidden, false);
-assert.equal(
-  elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
-  1,
-);
-const selectedChinaPoint = new FakeBaiduPoint(114.193082, 34.411437);
-baiduGeocodeCalls[0].callback(selectedChinaPoint);
-assert.equal(managedLongTimers.size, 0);
-assert.equal(baiduExactMarkerCount, 1);
-assert.equal(baiduMapInstance.overlays.length, 1);
-assert.equal(baiduMapInstance.overlays[0].isOverview, false);
-assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
-assert.equal(baiduMapInstance.center, selectedChinaPoint);
-assert.ok(baiduMapInstance.zoom >= 15);
-assert.ok(baiduInfoWindowInstance.content.includes(chinaRawFixture[0].arcadeName));
-assert.ok(baiduInfoWindowInstance.content.includes(chinaRawFixture[0].address));
-assert.equal(
-  elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
-  1,
-);
-assert.equal(chinaFirstItem.classList.contains("is-selected"), true);
-assert.equal(chinaFirstItem.attributes["aria-current"], "true");
+assert.equal(baiduExactMarkerCount, 0);
+assert.equal(elements["[data-china-map-back]"].textContent, "Back to districts");
+assert.match(elements["[data-status]"].textContent, /0 of 2 address-matched store markers/i);
+assert.equal(managedLongTimers.size, 1);
+assert.equal(managedRateTimers.size, 1);
 
-const exactMarkerZoomBeforeWheel = baiduMapInstance.zoom;
-const geocodesBeforeExactMarkerWheel = baiduGeocodeCalls.length;
-const wheelOnExactMarker = dispatchBaiduWheel(120);
-assert.equal(wheelOnExactMarker.defaultPrevented, true);
-assert.equal(wheelOnExactMarker.propagationStopped, true);
-assert.equal(baiduMapInstance.zoom, exactMarkerZoomBeforeWheel - 1);
-assert.equal(baiduMapInstance.overlays.length, 1);
-assert.equal(baiduMapInstance.overlays[0].isOverview, false);
-assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
-assert.equal(baiduGeocodeCalls.length, geocodesBeforeExactMarkerWheel);
-assert.equal(chinaFirstItem.classList.contains("is-selected"), true);
-assert.equal(chinaFirstItem.attributes["aria-current"], "true");
-
-baiduMapInstance.simulateUserZoom(6, selectedChinaPoint);
-assert.equal(baiduMapInstance.overlays.length, 1);
-assert.equal(baiduMapInstance.overlays[0].isOverview, false);
-assert.equal(baiduMapInstance.overlays[0].point, selectedChinaPoint);
-assert.equal(baiduGeocodeCalls.length, 1);
-
+// Exiting while a district batch is pending must cancel queued work and make
+// the already-issued callback stale.
+const staleDistrictCallback = baiduGeocodeCalls[geocodesBeforeProvinceSelection].callback;
 elements["[data-china-map-back]"].listeners.click();
-assert.equal(elements["[data-visible-count]"].textContent, "1 locations");
+assert.equal(managedLongTimers.size, 0);
+assert.equal(managedRateTimers.size, 0);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(baiduMapInstance.overlays[0].isOverview, true);
-assert.equal(baiduMapInstance.overlays[0].options.title, "尉氏县: 1 locations");
-assert.equal(elements["[data-china-map-back]"].textContent, "All districts");
+assert.equal(
+  baiduMapInstance.overlays[0].options.title,
+  `尉氏县: ${activeDistrictRawLocations.length} locations`,
+);
+const districtStatusAfterExit = elements["[data-status]"].textContent;
+const districtCenterAfterExit = baiduMapInstance.center;
+staleDistrictCallback(new FakeBaiduPoint(114.15, 34.45));
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, true);
+assert.equal(baiduMapInstance.center, districtCenterAfterExit);
+assert.equal(elements["[data-status]"].textContent, districtStatusAfterExit);
+
+// Re-enter and release the rate-limited active-district requests. Clicking a
+// queued store in the list must prioritize it without issuing a duplicate.
+const districtMarkerAfterStaleExit = baiduMapInstance.overlays[0];
+const geocodesBeforeResolvedDistrict = baiduGeocodeCalls.length;
+districtMarkerAfterStaleExit.listeners.click();
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeResolvedDistrict + 1);
+assert.equal(managedRateTimers.size, 1);
+const activeStoreItems = activeDistrictLocationIds.map((id) => (
+  elements["[data-list]"].items.find((item) => item.dataset.id === id)
+));
+assert.ok(activeStoreItems.every(Boolean));
+elements["[data-list]"].listeners.click({
+  target: activeStoreItems[1].nameButton,
+});
+assert.equal(
+  baiduGeocodeCalls.length,
+  geocodesBeforeResolvedDistrict + 1,
+  "selecting a queued district store must not duplicate its geocode request",
+);
+await releaseRateLimitedGeocodes(
+  geocodesBeforeResolvedDistrict + activeDistrictRawLocations.length,
+);
+const resolvedDistrictCalls = baiduGeocodeCalls.slice(geocodesBeforeResolvedDistrict);
+assert.deepEqual(
+  resolvedDistrictCalls.map((call) => call.address).sort(),
+  activeDistrictRawLocations.map((location) => location.address).sort(),
+);
+assert.ok(resolvedDistrictCalls.every((call) => call.city === "开封市"));
+assert.ok(
+  resolvedDistrictCalls.every((call) => (
+    activeDistrictRawLocations.some((location) => location.address === call.address)
+  )),
+  "only stores inside the active district may be geocoded",
+);
+assert.equal(managedLongTimers.size, activeDistrictRawLocations.length);
+
+const pointByAddress = new Map([
+  [
+    activeDistrictRawLocations[0].address,
+    new FakeBaiduPoint(114.193082, 34.411437),
+  ],
+  [
+    activeDistrictRawLocations[1].address,
+    new FakeBaiduPoint(114.203082, 34.421437),
+  ],
+]);
+// Resolve out of order to prove that asynchronous Baidu callbacks do not
+// affect marker completeness or list selection.
+resolvedDistrictCalls[1].callback(pointByAddress.get(resolvedDistrictCalls[1].address));
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, false);
+resolvedDistrictCalls[0].callback(pointByAddress.get(resolvedDistrictCalls[0].address));
+assert.equal(managedLongTimers.size, 0);
+assert.equal(managedRateTimers.size, 0);
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => !marker.isOverview));
+assert.deepEqual(
+  baiduMapInstance.overlays.map((marker) => marker.options.title).sort(),
+  activeDistrictRawLocations.map((location) => location.arcadeName).sort(),
+);
+assert.match(elements["[data-status]"].textContent, /showing 2 address-matched store markers/i);
+assert.equal(
+  baiduExactMarkerCount,
+  activeDistrictRawLocations.length,
+  "province, city, and district summaries must not create exact store markers",
+);
+
+const geocodesAfterDistrictBatch = baiduGeocodeCalls.length;
+const firstExactMarker = baiduMapInstance.overlays.find(
+  (marker) => marker.options.title === activeDistrictRawLocations[0].arcadeName,
+);
+assert.ok(firstExactMarker);
+firstExactMarker.listeners.click();
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+assert.ok(baiduMapInstance.infoWindow.content.includes(activeDistrictRawLocations[0].arcadeName));
+assert.ok(baiduMapInstance.infoWindow.content.includes(activeDistrictRawLocations[0].address));
+assert.equal(activeStoreItems[0].classList.contains("is-selected"), true);
+assert.equal(activeStoreItems[0].attributes["aria-current"], "true");
+assert.equal(elements["[data-china-map-back]"].textContent, "Back to district stores");
+
+elements["[data-list]"].listeners.click({
+  target: activeStoreItems[1].nameButton,
+});
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+assert.equal(
+  baiduMapInstance.center,
+  pointByAddress.get(activeDistrictRawLocations[1].address),
+);
+assert.ok(baiduMapInstance.zoom >= 15);
+assert.ok(baiduMapInstance.infoWindow.content.includes(activeDistrictRawLocations[1].arcadeName));
+assert.equal(activeStoreItems[0].classList.contains("is-selected"), false);
+assert.equal(activeStoreItems[1].classList.contains("is-selected"), true);
+
+// First Back only clears store selection. The second Back exits the exact
+// layer and restores the district summary marker.
+elements["[data-china-map-back]"].listeners.click();
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => !marker.isOverview));
 assert.equal(
   elements["[data-list]"].items.filter((item) => item.classList.contains("is-selected")).length,
   0,
 );
+assert.equal(elements["[data-china-map-back]"].textContent, "Back to districts");
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+elements["[data-china-map-back]"].listeners.click();
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, true);
+assert.equal(
+  baiduMapInstance.overlays[0].options.title,
+  `尉氏县: ${activeDistrictRawLocations.length} locations`,
+);
+
+// Successful address matches remain cached for this page session.
+const cachedDistrictMarker = baiduMapInstance.overlays[0];
+cachedDistrictMarker.listeners.click();
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+assert.equal(managedLongTimers.size, 0);
+assert.equal(managedRateTimers.size, 0);
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => !marker.isOverview));
+assert.deepEqual(
+  baiduMapInstance.overlays.map((marker) => marker.point),
+  activeDistrictRawLocations.map((location) => pointByAddress.get(location.address)),
+);
+
+// Zooming out to 12 exits the store layer; zooming back to 14 automatically
+// restores every cached exact marker without another request.
+baiduMapInstance.simulateUserZoom(12, weishiOverviewPoint);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, true);
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+baiduMapInstance.simulateUserZoom(14, weishiOverviewPoint);
+assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
+assert.ok(baiduMapInstance.overlays.every((marker) => !marker.isOverview));
+assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
+baiduMapInstance.simulateUserZoom(12, weishiOverviewPoint);
+assert.equal(baiduMapInstance.overlays.length, 1);
+assert.equal(baiduMapInstance.overlays[0].isOverview, true);
 
 elements["[data-china-map-overview]"].listeners.click();
 assert.equal(elements["[data-subregion]"].value, "");
-assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(
+  elements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
 assert.ok(baiduMapInstance.overlays.every((marker) => marker.isOverview));
 assert.equal(elements["[data-china-map-back]"].hidden, true);
 assert.equal(elements["[data-china-map-overview]"].hidden, true);
 
-const allChinaFirstItem = elements["[data-list]"].items.find(
-  (item) => item.dataset.id === "cn-wahlap-2081921990512345090",
+// A pending batch in another district must also be inert after switching away
+// from the China dataset.
+const zhejiangMarkerForStaleBatch = baiduMapInstance.overlays.find(
+  (marker) => marker.options.title.startsWith("浙江:"),
 );
-const chinaSecondItem = elements["[data-list]"].items.find(
-  (item) => item.dataset.id === "cn-wahlap-2072228503426945025",
-);
-assert.ok(allChinaFirstItem);
-assert.ok(chinaSecondItem);
-elements["[data-list]"].listeners.click({ target: allChinaFirstItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 2);
-assert.equal(baiduGeocodeCalls[1].city, "开封市");
-elements["[data-list]"].listeners.click({ target: chinaSecondItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 3);
-assert.equal(baiduGeocodeCalls[2].address, chinaRawFixture[2].address);
-assert.equal(baiduGeocodeCalls[2].city, "郑州市");
-assert.equal(clustererInstance.markers.length, 0);
+assert.ok(zhejiangMarkerForStaleBatch);
+zhejiangMarkerForStaleBatch.listeners.click();
+const jinhuaMarkerForStaleBatch = baiduMapInstance.overlays[0];
+jinhuaMarkerForStaleBatch.listeners.click();
+const yiwuMarkerForStaleBatch = baiduMapInstance.overlays[0];
+const geocodesBeforeDatasetSwitchBatch = baiduGeocodeCalls.length;
+yiwuMarkerForStaleBatch.listeners.click();
+assert.equal(baiduGeocodeCalls.length, geocodesBeforeDatasetSwitchBatch + 1);
 assert.equal(managedLongTimers.size, 1);
-
-datasetButtons[1].listeners.click();
-await settle();
-assert.equal(appendedScripts.length, 3);
-assert.equal(baiduGeocodeCalls.length, 3);
-assert.equal(managedLongTimers.size, 1);
-
-const staleChinaPoint = new FakeBaiduPoint(114.1, 34.7);
-baiduGeocodeCalls[1].callback(staleChinaPoint);
-assert.equal(baiduMapInstance.overlays.length, 0);
-assert.notEqual(baiduMapInstance.center, staleChinaPoint);
-const selectedSecondPoint = new FakeBaiduPoint(113.6254, 34.7466);
-baiduGeocodeCalls[2].callback(selectedSecondPoint);
-assert.equal(managedLongTimers.size, 0);
-assert.equal(baiduExactMarkerCount, 2);
-assert.equal(baiduMapInstance.overlays.length, 1);
-assert.equal(baiduMapInstance.overlays[0].isOverview, false);
-assert.equal(baiduMapInstance.overlays[0].point, selectedSecondPoint);
-assert.equal(baiduMapInstance.center, selectedSecondPoint);
-assert.ok(baiduMapInstance.zoom >= 15);
-assert.ok(baiduInfoWindowInstance.content.includes(chinaRawFixture[2].arcadeName));
-assert.ok(baiduInfoWindowInstance.content.includes(chinaRawFixture[2].address));
-assert.equal(allChinaFirstItem.classList.contains("is-selected"), false);
-assert.equal(chinaSecondItem.classList.contains("is-selected"), true);
-assert.equal(allChinaFirstItem.attributes["aria-current"], undefined);
-assert.equal(chinaSecondItem.attributes["aria-current"], "true");
-
-elements["[data-list]"].listeners.click({ target: chinaSecondItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 3);
-assert.equal(baiduMapInstance.overlays.length, 1);
-
-elements["[data-list]"].listeners.click({ target: allChinaFirstItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 4);
-assert.equal(baiduMapInstance.overlays.length, 0);
-assert.equal(managedLongTimers.size, 1);
-elements["[data-list]"].listeners.click({ target: allChinaFirstItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 4);
-assert.equal(managedLongTimers.size, 1);
-fireManagedLongTimer(12000);
-assert.equal(managedLongTimers.size, 0);
-assert.match(elements["[data-status]"].textContent, /took too long/i);
-const timedOutChinaStatus = elements["[data-status]"].textContent;
-baiduGeocodeCalls[3].callback(new FakeBaiduPoint(114.2, 34.8));
-assert.equal(elements["[data-status]"].textContent, timedOutChinaStatus);
-assert.equal(baiduMapInstance.overlays.length, 0);
-
-elements["[data-china-map-overview]"].listeners.click();
-assert.equal(elements["[data-subregion]"].value, "");
-assert.equal(elements["[data-visible-count]"].textContent, "3 locations");
-assert.equal(baiduMapInstance.overlays.length, chinaSupportFixture.mapGroups.length);
-assert.ok(baiduMapInstance.overlays.every((marker) => marker.isOverview));
-assert.equal(elements["[data-china-map-overview]"].hidden, true);
-
-const pendingChinaItem = elements["[data-list]"].items.find(
-  (item) => item.dataset.id === "cn-wahlap-2081921990512345090",
-);
-assert.ok(pendingChinaItem);
-elements["[data-list]"].listeners.click({ target: pendingChinaItem.nameButton });
-assert.equal(baiduGeocodeCalls.length, 5);
-assert.equal(managedLongTimers.size, 1);
-const pendingChinaCallback = baiduGeocodeCalls[4].callback;
+const pendingChinaCallback = baiduGeocodeCalls.at(-1).callback;
 
 datasetButtons[0].listeners.click();
 await settle();
 assert.equal(managedLongTimers.size, 0);
+assert.equal(managedRateTimers.size, 0);
 assert.equal(fetchCounts.get("/data/maimai_locations.json"), 1);
 assert.equal(clustererInstance.markers.length, currentMapped);
 assert.equal(elements["[data-map]"].hidden, false);
@@ -1676,7 +1825,7 @@ assert.equal(baiduMapInstance.zoom, inactiveBaiduZoom);
 assert.equal(baiduMapInstance.zoomInCalls, inactiveBaiduZoomInCalls);
 assert.equal(baiduMapInstance.zoomOutCalls, inactiveBaiduZoomOutCalls);
 const restoredGoogleStatus = elements["[data-status]"].textContent;
-pendingChinaCallback(new FakeBaiduPoint(114.3, 34.9));
+pendingChinaCallback(new FakeBaiduPoint(120.075058, 29.306841));
 assert.equal(elements["[data-status]"].textContent, restoredGoogleStatus);
 assert.equal(baiduMapInstance.overlays.length, 0);
 assert.equal(elements["[data-exports]"].hidden, false);
@@ -1857,7 +2006,10 @@ const baiduMarkerCountBeforeMissingKey = baiduMarkerCount;
 vm.runInContext(source, missingKeyContext, { filename: "static/js/maimai-map.js" });
 await settle();
 assert.equal(missingKeyElements["[data-dataset-title]"].textContent, "舞萌DX Mainland China");
-assert.equal(missingKeyElements["[data-visible-count]"].textContent, "3 locations");
+assert.equal(
+  missingKeyElements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`,
+);
 assert.equal(missingKeyElements["[data-china-map]"].hidden, false);
 assert.equal(missingKeyScripts.length, 0);
 assert.equal(baiduMapCount, baiduMapCountBeforeMissingKey);

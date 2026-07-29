@@ -42,7 +42,7 @@
         aria-pressed="false"
         data-dataset="china"
         data-data-url="https://sega-register.wahlap.net/api/sega/maidx/rest/location"
-        data-support-url="/data/maimai_china_province_centers.json"
+        data-support-url="/data/maimai_china_region_hierarchy.json"
         data-source-url="https://wc.wahlap.net/maidx/location/index.html"
         data-adapter="wahlap"
         data-provider="baidu"
@@ -103,7 +103,8 @@
         </div>
         <div class="maimai-china-map-banner" data-china-map-banner hidden>
           <strong>Baidu Map</strong>
-          <span data-china-map-message>Select a province marker for an overview or a store name for one exact marker.</span>
+          <span data-china-map-message>Select a province, then a city, then a district marker. Select a store name for one exact marker.</span>
+          <button type="button" data-china-map-back hidden>Back</button>
           <button type="button" data-china-map-overview hidden>Province overview</button>
           <a data-china-map-external href="https://map.baidu.com/" target="_blank" rel="noopener">Open in Baidu</a>
         </div>

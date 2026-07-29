@@ -18,7 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORLDWIDE_PATH = ROOT / "static" / "data" / "maimai_locations_worldwide.json"
 WORLDWIDE_CSV_PATH = WORLDWIDE_PATH.with_suffix(".csv")
 WORLDWIDE_KML_PATH = WORLDWIDE_PATH.with_suffix(".kml")
-CHINA_CENTERS_PATH = ROOT / "static" / "data" / "maimai_china_province_centers.json"
+CHINA_HIERARCHY_PATH = (
+    ROOT / "static" / "data" / "maimai_china_region_hierarchy.json"
+)
 
 
 class LocatorParserTests(unittest.TestCase):
@@ -96,7 +98,9 @@ class GeneratedDatasetTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.worldwide = json.loads(WORLDWIDE_PATH.read_text(encoding="utf-8"))
-        cls.china_centers = json.loads(CHINA_CENTERS_PATH.read_text(encoding="utf-8"))
+        cls.china_hierarchy = json.loads(
+            CHINA_HIERARCHY_PATH.read_text(encoding="utf-8")
+        )
 
     def test_worldwide_schema_and_totals(self) -> None:
         payload = self.worldwide
@@ -176,16 +180,46 @@ class GeneratedDatasetTests(unittest.TestCase):
         placemarks = kml.findall(".//kml:Placemark", namespace)
         self.assertEqual(len(placemarks), self.worldwide["summary"]["mapped"])
 
-    def test_china_province_centers_cover_thirty_unique_areas(self) -> None:
-        groups = self.china_centers["mapGroups"]
+    def test_china_hierarchy_covers_three_unique_levels_in_bd09(self) -> None:
+        payload = self.china_hierarchy
+        groups = payload["mapGroups"]
+        provinces = payload["regions"]
+        self.assertEqual(payload["coordinateSystem"], "BD-09")
         self.assertEqual(len(groups), 30)
+        self.assertEqual(len(provinces), 30)
         self.assertEqual(len({group["id"] for group in groups}), 30)
         self.assertEqual(len({group["key"] for group in groups}), 30)
-        for group in groups:
-            self.assertGreaterEqual(group["lat"], -90, group["id"])
-            self.assertLessEqual(group["lat"], 90, group["id"])
-            self.assertGreaterEqual(group["lng"], -180, group["id"])
-            self.assertLessEqual(group["lng"], 180, group["id"])
+        self.assertEqual(
+            {group["key"] for group in groups},
+            {province["key"] for province in provinces},
+        )
+
+        city_count = 0
+        district_count = 0
+        for province in provinces:
+            self.assertGreater(len(province["cities"]), 0, province["key"])
+            self.assertEqual(
+                len({city["key"] for city in province["cities"]}),
+                len(province["cities"]),
+                province["key"],
+            )
+            city_count += len(province["cities"])
+            for city in province["cities"]:
+                self.assertIsInstance(city["districts"], list, city["key"])
+                self.assertEqual(
+                    len({district["key"] for district in city["districts"]}),
+                    len(city["districts"]),
+                    city["key"],
+                )
+                district_count += len(city["districts"])
+                for district in city["districts"]:
+                    self.assertGreaterEqual(district["lat"], -90, district["key"])
+                    self.assertLessEqual(district["lat"], 90, district["key"])
+                    self.assertGreaterEqual(district["lng"], -180, district["key"])
+                    self.assertLessEqual(district["lng"], 180, district["key"])
+
+        self.assertEqual(city_count, 362)
+        self.assertEqual(district_count, 3100)
 
 
 if __name__ == "__main__":

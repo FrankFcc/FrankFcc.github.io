@@ -10,6 +10,7 @@ const worldwidePayload = JSON.parse(
 );
 const source = fs.readFileSync("static/js/maimai-map.js", "utf8");
 const shortcodeSource = fs.readFileSync("layouts/shortcodes/maimai-map.html", "utf8");
+const paramsSource = fs.readFileSync("config/_default/params.yaml", "utf8");
 const workflowSource = fs.readFileSync(".github/workflows/publish.yaml", "utf8");
 const vendorSource = fs.readFileSync(
   "static/vendor/googlemaps-markerclusterer/2.6.2/index.min.js",
@@ -25,7 +26,13 @@ assert.match(
   /data-support-url="\/data\/maimai_china_region_hierarchy\.json"/,
 );
 assert.match(shortcodeSource, /HUGO_MAIMAI_BAIDU_MAPS_AK/);
+assert.match(shortcodeSource, /HUGO_MAIMAI_GOOGLE_MAPS_KEY/);
+assert.doesNotMatch(paramsSource, /AIza[0-9A-Za-z_-]{30,}/);
 assert.doesNotMatch(shortcodeSource, /data-china-map-frame|Mainland China Gaode Map/);
+assert.match(
+  workflowSource,
+  /HUGO_MAIMAI_GOOGLE_MAPS_KEY:\s*\$\{\{\s*secrets\.MAIMAI_GOOGLE_MAPS_KEY\s*\}\}/,
+);
 assert.match(
   workflowSource,
   /HUGO_MAIMAI_BAIDU_MAPS_AK:\s*\$\{\{\s*secrets\.MAIMAI_BAIDU_BROWSER_AK\s*\}\}/,

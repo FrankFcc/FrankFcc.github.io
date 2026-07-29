@@ -1,4 +1,4 @@
-{{ $mapsKey := site.Params.maimai_google_maps_key | default (os.Getenv "HUGO_MAIMAI_GOOGLE_MAPS_KEY") }}
+{{ $mapsKey := os.Getenv "HUGO_MAIMAI_GOOGLE_MAPS_KEY" | default site.Params.maimai_google_maps_key }}
 {{ $baiduMapsAk := os.Getenv "HUGO_MAIMAI_BAIDU_MAPS_AK" }}
 <script>
   document.currentScript.closest(".article")?.classList.add("maimai-map-page");

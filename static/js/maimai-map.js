@@ -1120,25 +1120,33 @@
       && point.lng <= northEast.lng;
   }
 
-  function nearestBaiduOverviewLocation() {
+  function nearestBaiduOverviewLocation({ allowOutsideBounds = false } = {}) {
     const center = state.baiduMapInstance?.getCenter?.();
     if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return null;
     const bounds = state.baiduMapInstance.getBounds?.();
     let nearest = null;
+    let nearestVisible = null;
     state.mapItems.forEach((location) => {
       if (!location.aggregate || location.unmatched) return;
       const navigationPoints = chinaOverviewNavigationPoints(location);
-      const nearbyPoints = bounds
-        ? navigationPoints.filter((point) => baiduBoundsContainPoint(bounds, point))
-        : navigationPoints;
-      if (!nearbyPoints.length) return;
-      const distance = nearbyPoints.reduce(
+      const distance = navigationPoints.reduce(
         (best, point) => Math.min(best, baiduOverviewDistanceSquared(center, point)),
         Number.POSITIVE_INFINITY,
       );
       if (!nearest || distance < nearest.distance) nearest = { location, distance };
+      const nearbyPoints = bounds
+        ? navigationPoints.filter((point) => baiduBoundsContainPoint(bounds, point))
+        : navigationPoints;
+      if (!nearbyPoints.length) return;
+      const visibleDistance = nearbyPoints.reduce(
+        (best, point) => Math.min(best, baiduOverviewDistanceSquared(center, point)),
+        Number.POSITIVE_INFINITY,
+      );
+      if (!nearestVisible || visibleDistance < nearestVisible.distance) {
+        nearestVisible = { location, distance: visibleDistance };
+      }
     });
-    return nearest?.location || null;
+    return nearestVisible?.location || (allowOutsideBounds ? nearest?.location : null);
   }
 
   function applyChinaFiltersPreservingViewport() {
@@ -1240,7 +1248,7 @@
       state.chinaOverviewLevel === "district"
       && zoom >= CHINA_STORE_ZOOM
     ) {
-      const district = nearestBaiduOverviewLocation();
+      const district = nearestBaiduOverviewLocation({ allowOutsideBounds: true });
       if (district) selectBaiduOverview(district, { automatic: true });
     }
   }

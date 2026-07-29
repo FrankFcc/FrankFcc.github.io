@@ -1766,16 +1766,19 @@ assert.deepEqual(
 );
 
 // Zooming out to 12 exits the store layer; zooming back to 14 automatically
-// restores every cached exact marker without another request.
+// restores every cached exact marker without another request. The zoomed map
+// may be centered on a store far from the administrative-center summary pin,
+// so automatic district selection must also use the nearest global fallback.
+const offCenterStorePoint = new FakeBaiduPoint(124.193082, 44.411437);
 baiduMapInstance.simulateUserZoom(12, weishiOverviewPoint);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(baiduMapInstance.overlays[0].isOverview, true);
 assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
-baiduMapInstance.simulateUserZoom(14, weishiOverviewPoint);
+baiduMapInstance.simulateUserZoom(14, offCenterStorePoint);
 assert.equal(baiduMapInstance.overlays.length, activeDistrictRawLocations.length);
 assert.ok(baiduMapInstance.overlays.every((marker) => !marker.isOverview));
 assert.equal(baiduGeocodeCalls.length, geocodesAfterDistrictBatch);
-baiduMapInstance.simulateUserZoom(12, weishiOverviewPoint);
+baiduMapInstance.simulateUserZoom(12, offCenterStorePoint);
 assert.equal(baiduMapInstance.overlays.length, 1);
 assert.equal(baiduMapInstance.overlays[0].isOverview, true);
 

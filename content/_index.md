@@ -50,19 +50,6 @@ sections:
       columns: '1'
       view: card
 
-  - block: collection
-    id: projects
-    content:
-      title: Projects
-      count: 4
-      filters:
-        folders:
-          - project
-      order: desc
-    design:
-      columns: '1'
-      view: card
-
   - block: markdown
     id: overview
     content:
@@ -78,11 +65,6 @@ sections:
             <span>Writing</span>
             <strong>Posts</strong>
             <p>Longer notes on research, tools, and experiments.</p>
-          </a>
-          <a class="cf-quick-card" href="/project/">
-            <span>Builds</span>
-            <strong>Projects</strong>
-            <p>Research systems, prototypes, and engineering notes.</p>
           </a>
           <a class="cf-quick-card" href="/memory/">
             <span>Photos</span>

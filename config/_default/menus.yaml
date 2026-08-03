@@ -13,9 +13,6 @@ main:
   - name: Posts
     url: '/post/'
     weight: 30
-  - name: Projects
-    url: '/project/'
-    weight: 40
   - name: Memory
     url: '/memory/'
     weight: 50

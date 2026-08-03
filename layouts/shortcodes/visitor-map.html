@@ -1,12 +1,19 @@
+{{- $cfg := site.Data.visitors -}}
+{{- $widgetId := $cfg.widget_id | default "frankfcc26" -}}
+{{- $mapSlot := $cfg.map_slot | default "frankmap" -}}
+{{- $statsURL := printf "https://whos.amung.us/stats/%s/" $widgetId -}}
 <div class="visitor-panel">
   <div class="visitor-panel-copy">
     <span>Live Traffic</span>
     <strong>Visitor Map</strong>
-    <p>Recent visits are recorded and shown on a compact live map.</p>
+    <p>See where recent visitors are joining from around the world.</p>
+    <a href="{{ $statsURL }}" target="_blank" rel="noopener">Open visitor history</a>
   </div>
   <div class="visitor-panel-map" aria-label="Live visitor map">
     <div class="visitor-map-frame">
-      <script type="text/javascript" id="mapmyvisitors" src="https://mapmyvisitors.com/map.js?cl=ffffff&w=a&t=a&d=EvbWLD3Ut8DJ1DAg8gF5NkJKV9AnUbCDPxON08-Bi9w"></script>
+      <script id="_wau{{ $mapSlot }}">var _wau = _wau || []; _wau.push(["map", "{{ $widgetId }}", "{{ $mapSlot }}", "720", "360", "night", "cross-blue"]);</script>
+      <script async src="https://waust.at/m.js"></script>
+      <noscript><a href="{{ $statsURL }}">View visitor history</a></noscript>
     </div>
   </div>
 </div>

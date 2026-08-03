@@ -1,0 +1,4 @@
+# whos.amung.us widget id used for the live map and public visitor history.
+# Changing this id starts a new visitor history.
+widget_id: 'frankfcc26'
+map_slot: 'frankmap'

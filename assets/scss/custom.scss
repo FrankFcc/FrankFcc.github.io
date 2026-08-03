@@ -850,7 +850,13 @@ body {
 .visitor-panel-copy p {
   color: var(--cf-muted);
   line-height: 1.5;
-  margin: 0;
+  margin: 0 0 0.9rem;
+}
+
+.visitor-panel-copy a {
+  color: var(--cf-accent);
+  font-weight: 700;
+  width: fit-content;
 }
 
 .visitor-panel-map {
@@ -869,7 +875,7 @@ body {
 
 .visitor-map-frame {
   align-items: center;
-  aspect-ratio: 300 / 190;
+  aspect-ratio: 2 / 1;
   background: #2d78ad;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 8px;
@@ -888,16 +894,32 @@ body {
 .visitor-map-frame object,
 .visitor-map-frame canvas,
 .visitor-map-frame svg,
+.visitor-map-frame > a,
+.visitor-map-frame > span,
 .visitor-map-frame > * {
   border: 0 !important;
   border-radius: 8px;
   max-width: 100% !important;
 }
 
+.visitor-map-frame > a,
+.visitor-map-frame > span {
+  display: block;
+  height: 100% !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
+.visitor-map-frame iframe,
 .visitor-map-frame img,
+.visitor-map-frame object,
 .visitor-map-frame canvas,
-.visitor-map-frame svg {
-  height: auto !important;
+.visitor-map-frame svg,
+.visitor-map-frame a img {
+  display: block;
+  height: 100% !important;
+  object-fit: cover;
+  width: 100% !important;
 }
 
 .maimai-map-app {

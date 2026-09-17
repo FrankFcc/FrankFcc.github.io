@@ -9,6 +9,7 @@
       id: button.dataset.dataset,
       label: button.dataset.label || button.textContent.trim(),
       dataUrl: button.dataset.dataUrl,
+      verifyUrl: button.dataset.verifyUrl || "",
       supportUrl: button.dataset.supportUrl || "",
       sourceUrl: button.dataset.sourceUrl || "",
       adapter: button.dataset.adapter || "json",
@@ -57,6 +58,7 @@
     provider: "google",
     payload: null,
     payloadCache: new Map(),
+    chinaVerification: new Map(),
     locations: [],
     filtered: [],
     mapItems: [],
@@ -263,11 +265,15 @@
         + `${escapeHtml(source.name)}</a>`
       ))
       .join(" / ");
-    const refreshLabel = state.payload.live ? "Live data loaded" : "Dataset refreshed";
+    const refreshLabel = usesChinaMap() ? "Locations saved" : "Dataset refreshed";
     const note = state.payload.notes?.[0]
       ? ` ${escapeHtml(state.payload.notes[0])}`
       : "";
-    els.source.innerHTML = `Source: ${sources}. ${refreshLabel} ${escapeHtml(generated)}.${note}`;
+    const verification = usesChinaMap()
+      ? state.chinaVerification.get(state.datasetId)?.message || ""
+      : "";
+    els.source.innerHTML = `Source: ${sources}. ${refreshLabel} ${escapeHtml(generated)}.`
+      + `${verification ? ` ${escapeHtml(verification)}` : ""}${note}`;
   }
 
   function updateExports(config) {
@@ -576,14 +582,119 @@
     state.baiduInfo = null;
     state.baiduPoint = null;
     state.baiduFocusedLocationId = null;
+    state.baiduFocusedLocationKey = null;
   }
 
   function usesChinaStoreLayer() {
     return usesChinaMap() && state.chinaOverviewLevel === "store";
   }
 
+  const BAIDU_STORE_CACHE_STORAGE_KEY = "maimaiChinaBaiduPoints:v1";
+  const BAIDU_STORE_CACHE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+  const BAIDU_STORE_CACHE_MAX_ENTRIES = 5000;
+  const baiduStoreCacheRecords = new Map();
+  let baiduStoreCacheHydrated = false;
+
   function baiduStoreCacheKey(location) {
-    return `${location.sourceId || location.id}|${location.address}`;
+    return JSON.stringify([
+      String(location.sourceId || location.id || ""),
+      location.address || "",
+      location.province || location.subregion || "",
+      location.city || "",
+    ]);
+  }
+
+  function validBaiduStorePoint(point) {
+    return hasCoordinates(point)
+      && Math.abs(point.lat) <= 90
+      && Math.abs(point.lng) <= 180;
+  }
+
+  function validBaiduStoreCacheRecord(record, now = Date.now()) {
+    return validBaiduStorePoint(record)
+      && Number.isFinite(record.savedAt)
+      && record.savedAt <= now + 5 * 60 * 1000
+      && now - record.savedAt < BAIDU_STORE_CACHE_MAX_AGE_MS;
+  }
+
+  function hydrateBaiduStoreCache() {
+    if (baiduStoreCacheHydrated) return;
+    baiduStoreCacheHydrated = true;
+    try {
+      const saved = JSON.parse(localStorage.getItem(BAIDU_STORE_CACHE_STORAGE_KEY) || "null");
+      if (saved?.schemaVersion !== 1 || !Array.isArray(saved.entries)) return;
+      const now = Date.now();
+      saved.entries
+        .filter((entry) => (
+          typeof entry?.key === "string"
+          && validBaiduStoreCacheRecord(entry, now)
+        ))
+        .sort((left, right) => right.savedAt - left.savedAt)
+        .slice(0, BAIDU_STORE_CACHE_MAX_ENTRIES)
+        .forEach((entry) => baiduStoreCacheRecords.set(entry.key, {
+          lat: entry.lat,
+          lng: entry.lng,
+          savedAt: entry.savedAt,
+        }));
+    } catch (error) {
+      // Storage may be blocked, full, or contain an older invalid value.
+    }
+  }
+
+  function persistBaiduStoreCache() {
+    const now = Date.now();
+    const entries = Array.from(baiduStoreCacheRecords, ([key, entry]) => ({ key, ...entry }))
+      .reverse()
+      .filter((entry) => validBaiduStoreCacheRecord(entry, now))
+      .sort((left, right) => right.savedAt - left.savedAt)
+      .slice(0, BAIDU_STORE_CACHE_MAX_ENTRIES);
+    const retained = new Set(entries.map((entry) => entry.key));
+    baiduStoreCacheRecords.forEach((_entry, key) => {
+      if (retained.has(key)) return;
+      baiduStoreCacheRecords.delete(key);
+      state.baiduStorePointCache.delete(key);
+    });
+    try {
+      localStorage.setItem(BAIDU_STORE_CACHE_STORAGE_KEY, JSON.stringify({
+        schemaVersion: 1,
+        entries,
+      }));
+    } catch (error) {
+      // Keep successful coordinates available for this visit if saving fails.
+    }
+  }
+
+  function rememberBaiduStorePoint(location, point) {
+    if (!validBaiduStorePoint(point)) return false;
+    hydrateBaiduStoreCache();
+    const key = baiduStoreCacheKey(location);
+    state.baiduStorePointCache.set(key, point);
+    baiduStoreCacheRecords.set(key, { lat: point.lat, lng: point.lng, savedAt: Date.now() });
+    persistBaiduStoreCache();
+    return true;
+  }
+
+  function savedBaiduStorePoint(location) {
+    if (
+      location.coordinateSystem === "BD-09"
+      && !location.aggregate
+      && !/center|approximate/i.test(location.coordinatePrecision || "")
+      && validBaiduStorePoint(location)
+    ) {
+      return new BMap.Point(location.lng, location.lat);
+    }
+    hydrateBaiduStoreCache();
+    const key = baiduStoreCacheKey(location);
+    const record = baiduStoreCacheRecords.get(key);
+    if (!validBaiduStoreCacheRecord(record)) {
+      baiduStoreCacheRecords.delete(key);
+      state.baiduStorePointCache.delete(key);
+      return null;
+    }
+    if (!state.baiduStorePointCache.has(key)) {
+      state.baiduStorePointCache.set(key, new BMap.Point(record.lng, record.lat));
+    }
+    return state.baiduStorePointCache.get(key);
   }
 
   function cancelBaiduStoreGeocoding() {
@@ -1490,8 +1601,7 @@
       if (!baiduStoreRequestIsCurrent(token, sequence, signature)) return;
       state.baiduStoreInFlight = Math.max(0, state.baiduStoreInFlight - 1);
       state.baiduStoreCompleted += 1;
-      if (point) {
-        state.baiduStorePointCache.set(baiduStoreCacheKey(location), point);
+      if (rememberBaiduStorePoint(location, point)) {
         state.baiduStoreFailedIds.delete(location.id);
         addBaiduStoreMarker(location, point);
       } else {
@@ -1529,7 +1639,7 @@
     clearBaiduOverviewMarkers();
     const locations = state.filtered.slice();
     const signature = `${state.loadSequence}:${state.baiduStoreScopeKey}:${
-      locations.map((location) => `${location.id}|${location.address}`).join(",")
+      locations.map((location) => baiduStoreCacheKey(location)).join(",")
     }`;
     if (signature === state.baiduStoreLayerSignature) {
       updateBaiduStoreProgress();
@@ -1542,7 +1652,7 @@
     state.baiduStoreTotal = locations.length;
     const pending = [];
     locations.forEach((location) => {
-      const point = state.baiduStorePointCache.get(baiduStoreCacheKey(location));
+      const point = savedBaiduStorePoint(location);
       if (point) {
         state.baiduStoreCompleted += 1;
         addBaiduStoreMarker(location, point);
@@ -1651,8 +1761,18 @@
 
   function geocodeBaiduLocation(location, token) {
     if (!state.baiduReady || !state.baiduGeocoder || !state.baiduMapInstance) return;
+    const datasetSequence = state.loadSequence;
+    const requestIsCurrent = () => (
+      token === state.baiduFocusToken
+      && datasetSequence === state.loadSequence
+      && state.datasetId === "china"
+      && usesChinaMap()
+      && state.selectedLocationId === location.id
+    );
+    if (!requestIsCurrent()) return;
     if (
       state.baiduFocusedLocationId === location.id
+      && state.baiduFocusedLocationKey === baiduStoreCacheKey(location)
       && state.baiduMarker
       && state.baiduPoint
     ) {
@@ -1664,43 +1784,19 @@
       return;
     }
 
-    const datasetSequence = state.loadSequence;
     clearBaiduGeocodeTimer();
     state.baiduPendingLocationId = location.id;
     state.baiduGeocoding = true;
     clearBaiduMarker();
     setChinaMapMessage(`Locating ${location.name} from its official Wahlap address...`, true);
     updateMapStatus();
-    const requestIsCurrent = () => (
-      token === state.baiduFocusToken
-      && datasetSequence === state.loadSequence
-      && state.datasetId === "china"
-      && usesChinaMap()
-      && state.selectedLocationId === location.id
-    );
-    const geocodeTimer = window.setTimeout(() => {
-      if (state.baiduGeocodeTimer === geocodeTimer) {
-        state.baiduGeocodeTimer = null;
-      }
-      if (!requestIsCurrent()) return;
-      state.baiduFocusToken += 1;
-      state.baiduGeocoding = false;
-      state.baiduPendingLocationId = null;
-      setChinaMapMessage(
-        `Baidu took too long to locate ${location.name}. Use the external Baidu link or select the store again.`,
-      );
-      setStatus(
-        `Baidu took too long to locate ${location.name}. Select the store again to retry; no bulk markers are loaded.`,
-      );
-    }, 12000);
-    state.baiduGeocodeTimer = geocodeTimer;
-    state.baiduGeocoder.getPoint(location.address, (point) => {
+    const finish = (point, { cached = false } = {}) => {
       if (!requestIsCurrent()) return;
       clearBaiduGeocodeTimer();
 
       state.baiduGeocoding = false;
       state.baiduPendingLocationId = null;
-      if (!point) {
+      if (!validBaiduStorePoint(point)) {
         setChinaMapMessage(
           `Baidu could not locate ${location.name} from the official address. Use “Open in Baidu”.`,
         );
@@ -1710,7 +1806,7 @@
         return;
       }
 
-      state.baiduStorePointCache.set(baiduStoreCacheKey(location), point);
+      if (!cached) rememberBaiduStorePoint(location, point);
       clearBaiduMarker();
       const marker = new BMap.Marker(point, { title: location.name });
       const info = new BMap.InfoWindow(`
@@ -1733,11 +1829,38 @@
       state.baiduInfo = info;
       state.baiduPoint = point;
       state.baiduFocusedLocationId = location.id;
+      state.baiduFocusedLocationKey = baiduStoreCacheKey(location);
       setChinaMapMessage(
         `Showing one address-matched marker for ${location.name}. Verify it against the official Wahlap address.`,
       );
       updateMapStatus();
-    }, location.city || location.subregion);
+    };
+    const savedPoint = savedBaiduStorePoint(location);
+    if (savedPoint) {
+      finish(savedPoint, { cached: true });
+      return;
+    }
+    const geocodeTimer = window.setTimeout(() => {
+      if (state.baiduGeocodeTimer === geocodeTimer) {
+        state.baiduGeocodeTimer = null;
+      }
+      if (!requestIsCurrent()) return;
+      state.baiduFocusToken += 1;
+      state.baiduGeocoding = false;
+      state.baiduPendingLocationId = null;
+      setChinaMapMessage(
+        `Baidu took too long to locate ${location.name}. Use the external Baidu link or select the store again.`,
+      );
+      setStatus(
+        `Baidu took too long to locate ${location.name}. Select the store again to retry; no bulk markers are loaded.`,
+      );
+    }, 12000);
+    state.baiduGeocodeTimer = geocodeTimer;
+    try {
+      state.baiduGeocoder.getPoint(location.address, (point) => finish(point), location.city || location.subregion);
+    } catch (error) {
+      finish(null);
+    }
   }
 
   function focusChinaLocation(location) {
@@ -1846,21 +1969,21 @@
     if (usesChinaMap()) {
       if (!getBaiduApiKey()) {
         setStatus(
-          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          `${state.filtered.length.toLocaleString()} saved official locations are list-ready. `
           + "Add a domain-restricted Baidu Browser AK to enable the interactive map; no bulk markers are loaded.",
         );
         return;
       }
       if (state.baiduLoading || (!state.baiduReady && !state.baiduLoadFailed)) {
         setStatus(
-          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          `${state.filtered.length.toLocaleString()} saved official locations are list-ready. `
           + "Baidu Map is loading; the province overview will appear when ready.",
         );
         return;
       }
       if (state.baiduLoadFailed) {
         setStatus(
-          `${state.filtered.length.toLocaleString()} live official locations are list-ready. `
+          `${state.filtered.length.toLocaleString()} saved official locations are list-ready. `
           + "Baidu Map could not load; use the external Baidu links while the list remains available.",
         );
         return;
@@ -1935,7 +2058,7 @@
               : `Zoom to level ${CHINA_STORE_ZOOM} near a district, or select it, for every store marker there`
           );
         setStatus(
-          `${state.filtered.length.toLocaleString()} live official locations summarized into `
+          `${state.filtered.length.toLocaleString()} saved official locations summarized into `
           + `${overviewCount.toLocaleString()} ${level} overview ${markerLabel}.`
           + `${listOnlySuffix} ${nextStep}.`,
         );
@@ -1944,7 +2067,7 @@
     }
     if (state.payload.mapMode === "region-summary") {
       setStatus(
-        `${state.filtered.length.toLocaleString()} live official locations summarized into `
+        `${state.filtered.length.toLocaleString()} saved official locations summarized into `
         + `${state.mapItems.length.toLocaleString()} province markers. `
         + "Wahlap does not publish exact store coordinates, so store actions use Google Maps search.",
       );
@@ -2205,162 +2328,141 @@
     };
   }
 
-  function chinaRegionAliases(region) {
-    const suffixPattern = /(?:特别行政区|维吾尔自治区|壮族自治区|回族自治区|自治区|自治州|自治县|自治旗|省直辖县级行政区划|市辖区|城区|地区|新区|盟|省|市|区|县|旗)$/u;
-    const aliases = new Set([
-      region?.name,
-      region?.key,
-      ...(Array.isArray(region?.aliases) ? region.aliases : []),
-    ].filter(Boolean).map(String));
-    Array.from(aliases).forEach((name) => {
-      const shortName = name.replace(suffixPattern, "");
-      if (shortName.length >= 2) aliases.add(shortName);
-    });
-    return Array.from(aliases).sort((a, b) => b.length - a.length);
-  }
-
-  function findChinaAddressRegion(address, regions, excludedAliases = null) {
-    let best = null;
-    (regions || []).forEach((region) => {
-      chinaRegionAliases(region).forEach((alias) => {
-        if (excludedAliases?.has(alias)) return;
-        if (!address.includes(alias)) return;
-        if (!best || alias.length > best.alias.length) {
-          best = { region, alias };
-        }
-      });
-    });
-    return best;
-  }
-
-  function matchChinaAddressHierarchy(address, province) {
-    const cities = province?.cities || [];
-    const provinceAliases = new Set(chinaRegionAliases(province));
-    const cityMatch = findChinaAddressRegion(address, cities, provinceAliases);
-    let city = cityMatch?.region || null;
-    let district = city
-      ? findChinaAddressRegion(address, city.districts || [])?.region || null
-      : null;
-
-    if (!city) {
-      let districtMatch = null;
-      cities.forEach((candidateCity) => {
-        const candidate = findChinaAddressRegion(address, candidateCity.districts || []);
-        if (candidate && (!districtMatch || candidate.alias.length > districtMatch.alias.length)) {
-          districtMatch = { ...candidate, city: candidateCity };
-        }
-      });
-      if (districtMatch) {
-        city = districtMatch.city;
-        district = districtMatch.region;
-      }
-    }
-    if (!city && cities.length === 1) {
-      [city] = cities;
-      district = findChinaAddressRegion(address, city.districts || [])?.region || null;
-    }
-    return { city, district };
-  }
-
   function normalizeWahlapPayload(rawLocations, support, config) {
-    if (!Array.isArray(rawLocations) || rawLocations.length === 0) {
-      throw new Error("Wahlap returned an invalid location list");
+    return window.MaimaiChinaData.normalize(rawLocations, support, config);
+  }
+
+  const CHINA_SNAPSHOT_STORAGE_KEY = "maimaiChinaSnapshot:v1";
+  const CHINA_VERIFY_TIMEOUT_MS = 10000;
+
+  function readStoredChinaPayload() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHINA_SNAPSHOT_STORAGE_KEY) || "null");
+      if (saved?.cacheVersion !== 1) return null;
+      return window.MaimaiChinaData.validateSavedPayload(saved.payload);
+    } catch (error) {
+      return null;
     }
-    const rawRegions = Array.isArray(support?.regions) ? support.regions : [];
-    const provinceGroups = support?.mapGroups || [];
-    const chinaRegions = provinceGroups.map((group) => {
-      const matched = rawRegions.find((region) => (
-        chinaRegionKey(region) === group.key
-        || chinaRegionAliases(region).includes(group.key)
-      ));
-      return {
-        ...(matched || {}),
-        ...group,
-        key: group.key,
-        name: group.name,
-        aliases: [...new Set([
-          ...chinaRegionAliases(matched),
-          ...chinaRegionAliases(group),
-        ])],
-        cities: matched?.cities || [],
-      };
+  }
+
+  function storeChinaPayload(payload) {
+    try {
+      localStorage.setItem(CHINA_SNAPSHOT_STORAGE_KEY, JSON.stringify({ cacheVersion: 1, payload }));
+      return true;
+    } catch (error) {
+      // Storage may be disabled or full; the shipped data and this session still work.
+      return false;
+    }
+  }
+
+  async function loadSavedChinaDataset(config) {
+    const cached = readStoredChinaPayload();
+    let shipped;
+    try {
+      shipped = window.MaimaiChinaData.validateSavedPayload(await fetchJson(config.dataUrl));
+    } catch (error) {
+      if (cached) return cached;
+      throw error;
+    }
+    if (
+      cached
+      && cached.hierarchyGeneratedAt === shipped.hierarchyGeneratedAt
+      && Date.parse(cached.generatedAt) >= Date.parse(shipped.generatedAt)
+    ) return cached;
+    storeChinaPayload(shipped);
+    return shipped;
+  }
+
+  async function fetchOfficialChinaList(url) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    let timer;
+    const timeout = new Promise((resolve, reject) => {
+      timer = window.setTimeout(() => {
+        controller?.abort();
+        reject(new Error("Official list check timed out"));
+      }, CHINA_VERIFY_TIMEOUT_MS);
     });
-    const provincesByKey = new Map(
-      chinaRegions.flatMap((province) => (
-        chinaRegionAliases(province).map((alias) => [alias, province])
-      )),
-    );
-    const locations = rawLocations.map((item) => {
-      if (!item || item.id == null || !item.province || !item.arcadeName || !item.address) {
-        throw new Error("Wahlap location schema changed");
+    try {
+      return await Promise.race([
+        (async () => {
+          const response = await fetch(url, {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+            ...(controller ? { signal: controller.signal } : {}),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return window.MaimaiChinaData.parseOfficialJson(await response.text());
+        })(),
+        timeout,
+      ]);
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function preserveSavedChinaCoordinates(previous, next) {
+    const byId = new Map(previous.locations.map((location) => [location.id, location]));
+    next.locations.forEach((location) => {
+      const old = byId.get(location.id);
+      if (
+        old?.coordinateSystem === "BD-09"
+        && hasCoordinates(old)
+        && old.address === location.address
+        && old.subregion === location.subregion
+        && old.city === location.city
+      ) {
+        location.lat = old.lat;
+        location.lng = old.lng;
+        location.needsGeocode = false;
+        location.coordinateSystem = "BD-09";
+        ["coordinatePrecision", "coordinateSource", "geocodedAt"].forEach((field) => {
+          if (old[field] != null) location[field] = old[field];
+        });
       }
-      const sourceProvince = String(item.province).trim();
-      const province = provincesByKey.get(sourceProvince);
-      const subregion = province?.key || sourceProvince;
-      const hierarchy = matchChinaAddressHierarchy(String(item.address), province);
-      return {
-        id: `cn-wahlap-${String(item.id)}`,
-        sourceId: String(item.id),
-        sourcePlaceId: item.placeId == null ? null : String(item.placeId),
-        name: String(item.arcadeName),
-        address: String(item.address),
-        lat: null,
-        lng: null,
-        needsGeocode: true,
-        source: "Wahlap maimai DX official location list",
-        gameTitle: "舞萌DX / maimai DX Mainland China",
-        country: "Mainland China",
-        region: "Mainland China",
-        subregion,
-        city: hierarchy.city?.name || "",
-        cityKey: chinaRegionKey(hierarchy.city),
-        district: hierarchy.district?.name || "",
-        districtKey: chinaRegionKey(hierarchy.district),
-        officialLocatorUrl: "https://wc.wahlap.net/maidx/location/index.html",
-        detailsUrl: "https://wc.wahlap.net/maidx/location/index.html",
-      };
     });
-    const provinces = new Set(locations.map((location) => location.subregion));
-    const mapGroups = provinceGroups.filter((group) => provinces.has(group.key));
-    // A new province in the live feed must not take all existing locations offline.
-    const missingProvinces = [...provinces].filter((key) => !provincesByKey.has(key));
-    const coverageNote = missingProvinces.length
-      ? `Province summaries are unavailable for ${missingProvinces.join(", ")}; `
-        + "their stores remain searchable in the list and can be opened individually on Baidu. "
-      : "";
-    return {
-      schemaVersion: 3,
-      id: config.id,
-      label: "舞萌DX Mainland China",
-      mapMode: "region-summary",
-      groupField: "subregion",
-      generatedAt: new Date().toISOString(),
-      live: true,
-      sources: [
-        {
-          name: "Wahlap / SEGA 舞萌DX official location list",
-          url: "https://wc.wahlap.net/maidx/location/index.html",
-          locator: "https://wc.wahlap.net/maidx/location/index.html",
-        },
-        {
-          name: support.source?.name || "Province-center reference coordinates",
-          url: support.source?.url || "",
-          locator: support.source?.url || "",
-        },
-      ],
-      notes: [
-        coverageNote + "Baidu shows one lightweight province, city, or district summary level at a time, then address-matches every store only inside the active district.",
-      ],
-      summary: {
-        total: locations.length,
-        mapped: 0,
-        needsGeocode: locations.length,
-        areaCount: provinces.size,
-      },
-      mapGroups,
-      chinaRegions,
-      locations,
+    next.summary.mapped = next.locations.filter(hasCoordinates).length;
+    next.summary.needsGeocode = next.locations.length - next.summary.mapped;
+  }
+
+  function verifyChinaDataset(config, payload) {
+    if (!config.verifyUrl || state.chinaVerification.has(config.id)) return;
+    const verification = {
+      status: "checking",
+      message: "Checking the official list for changes; saved locations remain available.",
     };
+    state.chinaVerification.set(config.id, verification);
+    renderSource();
+    verification.promise = (async () => {
+      try {
+        const official = await fetchOfficialChinaList(config.verifyUrl);
+        const data = window.MaimaiChinaData;
+        if (data.canonicalOfficialList(official) === data.canonicalSavedList(payload)) {
+          verification.status = "unchanged";
+          verification.message = "Official list checked: no changes.";
+          return;
+        }
+        const updated = normalizeWahlapPayload(official, {
+          generatedAt: payload.hierarchyGeneratedAt,
+          regions: payload.chinaRegions,
+          mapGroups: payload.chinaRegions.map(({ cities, aliases, ...province }) => province),
+          source: payload.sources?.[1],
+        }, { ...config, sourceUrl: config.verifyUrl });
+        preserveSavedChinaCoordinates(payload, updated);
+        data.validateSavedPayload(updated);
+        const persisted = storeChinaPayload(updated);
+        // Keep the active selection and in-flight geocoding intact. Use updates on the next visit.
+        state.payloadCache.set(config.id, updated);
+        verification.status = "changed";
+        verification.message = persisted
+          ? "The official list changed. Updated locations are saved for your next visit."
+          : "The official list changed. Reopen this map to see updated locations; browser storage is unavailable.";
+      } catch (error) {
+        verification.status = "unavailable";
+        verification.message = "Could not check the official list. Saved locations remain available.";
+      } finally {
+        if (state.datasetId === config.id && usesChinaMap()) renderSource();
+      }
+    })();
   }
 
   async function fetchJson(url) {
@@ -2371,16 +2473,9 @@
 
   async function loadDataset(config) {
     if (state.payloadCache.has(config.id)) return state.payloadCache.get(config.id);
-    const request = (async () => {
-      if (config.adapter === "wahlap") {
-        const [locations, support] = await Promise.all([
-          fetchJson(config.dataUrl),
-          fetchJson(config.supportUrl),
-        ]);
-        return normalizeWahlapPayload(locations, support, config);
-      }
-      return normalizeStaticPayload(await fetchJson(config.dataUrl), config);
-    })();
+    const request = config.adapter === "china-saved"
+      ? loadSavedChinaDataset(config)
+      : fetchJson(config.dataUrl).then((payload) => normalizeStaticPayload(payload, config));
     state.payloadCache.set(config.id, request);
     try {
       const payload = await request;
@@ -2501,6 +2596,7 @@
       state.datasetId = datasetId;
       resetActiveDataset(config);
       activatePayload(payload, config);
+      if (config.adapter === "china-saved") verifyChinaDataset(config, payload);
     } catch (error) {
       if (sequence !== state.loadSequence) return;
       setDatasetButtons(previousDatasetId);

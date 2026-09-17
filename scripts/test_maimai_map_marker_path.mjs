@@ -505,6 +505,92 @@ const chinaSupportFixture = {
   ],
 };
 
+// Exercise normalization against the shipped reference as well as the compact
+// interactive fixture: a newly published province must never disable the list.
+const realChinaSupport = JSON.parse(
+  fs.readFileSync("static/data/maimai_china_region_hierarchy.json", "utf8"),
+);
+const normalizationWindow = {};
+const normalizationContext = vm.createContext({
+  document: { querySelector: () => root },
+  window: normalizationWindow,
+});
+const normalizationSource = source.replace(
+  /  bindEvents\(\);\r?\n  selectDataset\(state\.datasetId\);/,
+  "  window.normalizeWahlapPayload = normalizeWahlapPayload;",
+);
+assert.notEqual(normalizationSource, source, "normalizer test hook must be installed");
+vm.runInContext(normalizationSource, normalizationContext, {
+  filename: "static/js/maimai-map.js",
+});
+const normalizeChina = (stores, support = realChinaSupport) => (
+  normalizationWindow.normalizeWahlapPayload(stores, support, { id: "china" })
+);
+const tibetRawLocation = {
+  id: "2090334498011553793",
+  province: "西藏",
+  arcadeName: "大玩家拉萨城关万达店",
+  address: "拉萨市城关区纳金街道万达广场2楼大玩家",
+  placeId: null,
+};
+const tibetPayload = normalizeChina([tibetRawLocation]);
+assert.equal(tibetPayload.locations.length, 1);
+assert.equal(tibetPayload.locations[0].subregion, "西藏");
+assert.equal(tibetPayload.locations[0].city, "拉萨市");
+assert.equal(tibetPayload.locations[0].cityKey, "拉萨市");
+assert.equal(tibetPayload.locations[0].district, "城关区");
+assert.equal(tibetPayload.locations[0].districtKey, "城关区");
+assert.equal(tibetPayload.mapGroups.length, 1);
+assert.equal(tibetPayload.mapGroups[0].key, "西藏");
+
+const allProvincePayload = normalizeChina(realChinaSupport.mapGroups.map((province, index) => ({
+  id: `coverage-${index}`,
+  province: province.key,
+  arcadeName: `${province.key}覆盖测试店`,
+  address: `${province.key}覆盖测试地址`,
+})));
+assert.equal(allProvincePayload.locations.length, 31);
+assert.equal(allProvincePayload.mapGroups.length, 31);
+assert.equal(allProvincePayload.summary.areaCount, 31);
+
+const aliasesPayload = normalizeChina([
+  { ...tibetRawLocation, province: "  西藏自治区  " },
+  { ...chinaRawFixture[0], province: " 河南省 " },
+]);
+assert.equal(aliasesPayload.locations[0].subregion, "西藏");
+assert.equal(aliasesPayload.locations[0].cityKey, "拉萨市");
+assert.equal(aliasesPayload.locations[0].districtKey, "城关区");
+assert.equal(aliasesPayload.locations[1].subregion, "河南");
+assert.equal(aliasesPayload.mapGroups.length, 2);
+
+const unknownProvinceLocation = {
+  id: "future-province-store",
+  province: "新地区",
+  arcadeName: "新地区测试店",
+  address: "新地区测试地址",
+};
+const partialCoveragePayload = normalizeChina([
+  ...chinaRawFixture,
+  unknownProvinceLocation,
+], chinaSupportFixture);
+assert.equal(partialCoveragePayload.locations.length, chinaRawFixture.length + 1);
+assert.equal(partialCoveragePayload.summary.total, chinaRawFixture.length + 1);
+assert.equal(partialCoveragePayload.summary.areaCount, 3);
+assert.deepEqual(
+  Array.from(partialCoveragePayload.mapGroups, (group) => group.key),
+  chinaSupportFixture.mapGroups.map((group) => group.key),
+);
+const unknownStore = partialCoveragePayload.locations.find(
+  (location) => location.sourceId === unknownProvinceLocation.id,
+);
+assert.ok(unknownStore, "a province missing from the reference must retain its store");
+assert.equal(unknownStore.subregion, unknownProvinceLocation.province);
+assert.equal(unknownStore.address, unknownProvinceLocation.address);
+assert.equal(unknownStore.cityKey, "");
+assert.equal(unknownStore.districtKey, "");
+assert.equal(partialCoveragePayload.locations[0].cityKey, "开封");
+assert.match(partialCoveragePayload.notes[0], /新地区/);
+
 let releaseChina;
 const chinaGate = new Promise((resolve) => {
   releaseChina = resolve;

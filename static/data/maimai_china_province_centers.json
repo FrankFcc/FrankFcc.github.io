@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-27T00:00:00Z",
+  "generatedAt": "2026-09-17T00:00:00Z",
   "coordinatePrecision": "province-center",
   "source": {
     "name": "ChinaRegionDistrict province centers (derived from AMap)",
@@ -30,6 +30,7 @@
     {"id": "cn-province-hunan", "key": "湖南", "name": "湖南", "lat": 28.112743, "lng": 112.9836},
     {"id": "cn-province-gansu", "key": "甘肃", "name": "甘肃", "lat": 36.05956, "lng": 103.826447},
     {"id": "cn-province-fujian", "key": "福建", "name": "福建", "lat": 26.100779, "lng": 119.295143},
+    {"id": "cn-province-tibet", "key": "西藏", "name": "西藏", "lat": 29.647535, "lng": 91.117525},
     {"id": "cn-province-guizhou", "key": "贵州", "name": "贵州", "lat": 26.600055, "lng": 106.70546},
     {"id": "cn-province-liaoning", "key": "辽宁", "name": "辽宁", "lat": 41.836175, "lng": 123.431382},
     {"id": "cn-province-chongqing", "key": "重庆", "name": "重庆", "lat": 29.562849, "lng": 106.551643},

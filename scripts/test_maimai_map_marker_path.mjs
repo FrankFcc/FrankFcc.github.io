@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const chinaData = require("../static/js/maimai-china-data.js");
 
 const currentPayload = JSON.parse(
   fs.readFileSync("static/data/maimai_locations.json", "utf8"),
@@ -24,10 +28,9 @@ assert.match(shortcodeSource, /data-baidu-zoom-in/);
 assert.match(shortcodeSource, /data-baidu-zoom-out/);
 assert.match(shortcodeSource, /data-china-map-back/);
 assert.match(shortcodeSource, /data-china-map-overview/);
-assert.match(
-  shortcodeSource,
-  /data-support-url="\/data\/maimai_china_region_hierarchy\.json"/,
-);
+assert.match(shortcodeSource, /data-adapter="china-saved"/);
+assert.match(shortcodeSource, /data-data-url="\/data\/maimai_locations_china\.json"/);
+assert.match(shortcodeSource, /data-verify-url="https:\/\/sega-register\.wahlap\.net/);
 assert.match(shortcodeSource, /HUGO_MAIMAI_BAIDU_MAPS_AK/);
 assert.match(shortcodeSource, /HUGO_MAIMAI_GOOGLE_MAPS_KEY/);
 assert.doesNotMatch(paramsSource, /AIza[0-9A-Za-z_-]{30,}/);
@@ -355,9 +358,9 @@ const datasetButtons = [
   new FakeElement({
     dataset: {
       dataset: "china",
-      dataUrl: "https://sega-register.wahlap.net/api/sega/maidx/rest/location",
-      supportUrl: "/data/maimai_china_region_hierarchy.json",
-      adapter: "wahlap",
+      dataUrl: "/data/maimai_locations_china.json",
+      verifyUrl: "https://sega-register.wahlap.net/api/sega/maidx/rest/location",
+      adapter: "china-saved",
       provider: "baidu",
       label: "Mainland China",
     },
@@ -510,7 +513,7 @@ const chinaSupportFixture = {
 const realChinaSupport = JSON.parse(
   fs.readFileSync("static/data/maimai_china_region_hierarchy.json", "utf8"),
 );
-const normalizationWindow = {};
+const normalizationWindow = { MaimaiChinaData: chinaData };
 const normalizationContext = vm.createContext({
   document: { querySelector: () => root },
   window: normalizationWindow,
@@ -596,6 +599,34 @@ const chinaGate = new Promise((resolve) => {
   releaseChina = resolve;
 });
 const fetchCounts = new Map();
+const chinaSavedFixture = normalizeChina(chinaRawFixture, chinaSupportFixture);
+assert.equal(chinaSavedFixture.schemaVersion, 4);
+assert.equal(chinaSavedFixture.live, false);
+assert.equal(chinaSavedFixture.locations[0].sourceProvince, chinaRawFixture[0].province);
+assert.equal(
+  chinaData.canonicalOfficialList(chinaRawFixture),
+  chinaData.canonicalSavedList(chinaSavedFixture),
+  "saved data must preserve the exact official list used for change verification",
+);
+assert.equal(
+  chinaData.canonicalOfficialList([...chinaRawFixture].reverse()),
+  chinaData.canonicalOfficialList(chinaRawFixture),
+  "ordering changes alone must not invalidate the saved list",
+);
+for (const change of [
+  { arcadeName: "Updated arcade name" },
+  { address: "Updated arcade address" },
+  { province: "西藏" },
+  { id: "replacement-store-id" },
+  { placeId: "replacement-place-id" },
+]) {
+  const changed = [{ ...chinaRawFixture[0], ...change }, ...chinaRawFixture.slice(1)];
+  assert.notEqual(
+    chinaData.canonicalOfficialList(changed),
+    chinaData.canonicalSavedList(chinaSavedFixture),
+    `same-count changes to ${Object.keys(change)[0]} must be detected`,
+  );
+}
 const fetchMock = async (url) => {
   fetchCounts.set(url, (fetchCounts.get(url) || 0) + 1);
   if (url === "/data/maimai_locations.json") {
@@ -604,12 +635,16 @@ const fetchMock = async (url) => {
   if (url === "/data/maimai_locations_worldwide.json") {
     return { ok: true, json: async () => worldwidePayload };
   }
-  if (url === "/data/maimai_china_region_hierarchy.json") {
-    return { ok: true, json: async () => chinaSupportFixture };
+  if (url === "/data/maimai_locations_china.json") {
+    await chinaGate;
+    return { ok: true, json: async () => chinaSavedFixture };
   }
   if (url === "https://sega-register.wahlap.net/api/sega/maidx/rest/location") {
-    await chinaGate;
-    return { ok: true, json: async () => chinaRawFixture };
+    return {
+      ok: true,
+      json: async () => chinaRawFixture,
+      text: async () => JSON.stringify(chinaRawFixture),
+    };
   }
   throw new Error(`unexpected fetch ${url}`);
 };
@@ -960,6 +995,7 @@ class FakeSuperClusterViewportAlgorithm {
 }
 
 const windowObject = {
+  MaimaiChinaData: chinaData,
   location: { search: "" },
   open(url) {
     openedUrls.push(url);
@@ -1060,6 +1096,7 @@ const windowObject = {
 };
 
 const context = vm.createContext({
+  AbortController,
   console,
   Date: ManagedDate,
   document: {
@@ -1144,8 +1181,10 @@ assert.equal(clustererInstance.markers.length, currentMapped);
 datasetButtons[1].listeners.click();
 datasetButtons[2].listeners.click();
 await settle();
-assert.equal(fetchCounts.get("https://sega-register.wahlap.net/api/sega/maidx/rest/location"), 1);
-assert.equal(fetchCounts.get("/data/maimai_china_region_hierarchy.json"), 1);
+assert.equal(fetchCounts.has("https://sega-register.wahlap.net/api/sega/maidx/rest/location"), false,
+  "an inactive saved-data load should not start remote verification");
+assert.equal(fetchCounts.get("/data/maimai_locations_china.json"), 1);
+assert.equal(fetchCounts.has("/data/maimai_china_region_hierarchy.json"), false);
 assert.equal(fetchCounts.get("/data/maimai_locations_worldwide.json"), 1);
 assert.equal(elements["[data-dataset-title]"].textContent, worldwidePayload.label);
 assert.equal(
@@ -1239,7 +1278,7 @@ assert.equal(elements["[data-stat-areas]"].textContent, "2 provinces");
 assert.equal(clustererInstance.markers.length, 0);
 assert.ok(
   elements["[data-status]"].textContent.includes(
-    `${chinaRawFixture.length} live official locations`,
+    `${chinaRawFixture.length} saved official locations`,
   ),
 );
 assert.match(elements["[data-status]"].textContent, /province overview/i);
@@ -2022,9 +2061,9 @@ const missingKeyElements = {
 const missingKeyChinaButton = new FakeElement({
   dataset: {
     dataset: "china",
-    dataUrl: "https://sega-register.wahlap.net/api/sega/maidx/rest/location",
-    supportUrl: "/data/maimai_china_region_hierarchy.json",
-    adapter: "wahlap",
+    dataUrl: "/data/maimai_locations_china.json",
+    verifyUrl: "https://sega-register.wahlap.net/api/sega/maidx/rest/location",
+    adapter: "china-saved",
     provider: "baidu",
     label: "Mainland China",
   },
@@ -2042,6 +2081,7 @@ missingKeyRoot.datasetButtons = [missingKeyChinaButton];
 const missingKeyScripts = [];
 const missingKeyOpenedUrls = [];
 const missingKeyWindow = {
+  MaimaiChinaData: chinaData,
   location: { search: "" },
   open(url) {
     missingKeyOpenedUrls.push(url);
@@ -2053,6 +2093,7 @@ const missingKeyWindow = {
   },
 };
 const missingKeyContext = vm.createContext({
+  AbortController,
   console,
   document: {
     querySelector(selector) {
@@ -2072,10 +2113,10 @@ const missingKeyContext = vm.createContext({
   },
   fetch: async (url) => {
     if (url === "https://sega-register.wahlap.net/api/sega/maidx/rest/location") {
-      return { ok: true, json: async () => chinaRawFixture };
+      return { ok: true, text: async () => JSON.stringify(chinaRawFixture) };
     }
-    if (url === "/data/maimai_china_region_hierarchy.json") {
-      return { ok: true, json: async () => chinaSupportFixture };
+    if (url === "/data/maimai_locations_china.json") {
+      return { ok: true, json: async () => chinaSavedFixture };
     }
     throw new Error(`unexpected missing-key fetch ${url}`);
   },
@@ -2128,6 +2169,219 @@ assert.equal(
   1,
 );
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function savedChinaBrowser({ official, stored = new Map(), blockedStorage = false,
+  savedError = null } = {}) {
+  const browserElements = Object.fromEntries(Object.keys(elements).map((selector) => [
+    selector,
+    selector === "[data-list]" ? new FakeListElement() : new FakeElement(),
+  ]));
+  const chinaButton = new FakeElement({ dataset: { ...datasetButtons[1].dataset } });
+  const currentButton = new FakeElement({ dataset: { ...datasetButtons[0].dataset } });
+  const browserRoot = new FakeElement({
+    dataset: { defaultDataset: "china", baiduMapsAk: "" },
+  });
+  browserRoot.elements = browserElements;
+  browserRoot.datasetButtons = [chinaButton, currentButton];
+  const requests = [];
+  const timers = new Map();
+  let timerId = 0;
+  const storage = {
+    getItem(key) {
+      if (blockedStorage) throw new Error("storage blocked by browser settings");
+      return stored.get(key) ?? null;
+    },
+    setItem(key, value) {
+      if (blockedStorage) throw new Error("storage quota exceeded");
+      stored.set(key, String(value));
+    },
+    removeItem(key) {
+      if (blockedStorage) throw new Error("storage blocked by browser settings");
+      stored.delete(key);
+    },
+  };
+  const browserWindow = {
+    MaimaiChinaData: chinaData,
+    location: { search: "" },
+    localStorage: storage,
+    setTimeout(callback, delay) {
+      const id = ++timerId;
+      timers.set(id, { callback, delay });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+    requestAnimationFrame(callback) { callback(); },
+  };
+  const browserContext = vm.createContext({
+    AbortController,
+    console,
+    document: {
+      querySelector: (selector) => selector === "[data-maimai-map]" ? browserRoot : null,
+      createElement: () => new FakeElement(),
+      head: { appendChild: (element) => element },
+    },
+    fetch: async (url, options) => {
+      requests.push(url);
+      if (url === chinaButton.dataset.dataUrl) {
+        if (savedError) throw savedError;
+        return { ok: true, json: async () => structuredClone(chinaSavedFixture) };
+      }
+      if (url === chinaButton.dataset.verifyUrl) {
+        return official(options);
+      }
+      if (url === currentButton.dataset.dataUrl) {
+        return { ok: true, json: async () => currentPayload };
+      }
+      throw new Error(`unexpected saved-China fetch ${url}`);
+    },
+    localStorage: storage,
+    setTimeout: browserWindow.setTimeout,
+    clearTimeout: browserWindow.clearTimeout,
+    URLSearchParams,
+    window: browserWindow,
+  });
+  vm.runInContext(source, browserContext, { filename: "static/js/maimai-map.js" });
+  return { elements: browserElements, root: browserRoot, chinaButton, currentButton,
+    requests, stored, timers };
+}
+
+const officialResponse = (records) => ({
+  ok: true,
+  text: async () => JSON.stringify(records),
+  json: async () => records,
+});
+
+const offlineVerification = deferred();
+const offlineBrowser = savedChinaBrowser({ official: () => offlineVerification.promise });
+await settle();
+assert.equal(offlineBrowser.root.attributes["aria-busy"], "false");
+assert.equal(offlineBrowser.elements["[data-dataset-title]"].textContent, chinaSavedFixture.label);
+assert.equal(offlineBrowser.elements["[data-visible-count]"].textContent,
+  `${chinaRawFixture.length} locations`, "a hanging remote check must not delay saved stores");
+assert.ok(offlineBrowser.elements["[data-list]"].innerHTML.includes(chinaRawFixture[0].arcadeName));
+assert.equal(offlineBrowser.requests.includes("/data/maimai_china_region_hierarchy.json"), false,
+  "stored city and district information must render without a second hierarchy request");
+const offlineList = offlineBrowser.elements["[data-list]"].innerHTML;
+offlineVerification.reject(new Error("official service offline"));
+await settle();
+assert.equal(offlineBrowser.elements["[data-list]"].innerHTML, offlineList);
+assert.equal(offlineBrowser.root.attributes["aria-busy"], "false");
+
+const timeoutBrowser = savedChinaBrowser({ official: () => new Promise(() => {}) });
+await settle();
+const verificationTimer = [...timeoutBrowser.timers.values()].find((timer) => timer.delay === 10000);
+assert.ok(verificationTimer, "the remote check must have a bounded timeout");
+verificationTimer.callback();
+await settle();
+assert.equal(timeoutBrowser.elements["[data-list]"].innerHTML, offlineList);
+assert.match(timeoutBrowser.elements["[data-source]"].innerHTML, /Could not check the official list/);
+assert.equal(timeoutBrowser.timers.size, 0, "verification must clean up its timeout");
+
+const reorderedVerification = deferred();
+const reorderedBrowser = savedChinaBrowser({ official: () => reorderedVerification.promise });
+await settle();
+const storedBeforeReordering = [...reorderedBrowser.stored];
+reorderedVerification.resolve(officialResponse([...chinaRawFixture].reverse()));
+await settle();
+assert.equal(reorderedBrowser.elements["[data-list]"].innerHTML, offlineList);
+assert.deepEqual([...reorderedBrowser.stored], storedBeforeReordering,
+  "an order-only change must not rewrite the saved list or its timestamps");
+assert.match(reorderedBrowser.elements["[data-source]"].innerHTML, /Official list checked: no changes/);
+
+const changedRecords = [
+  { ...chinaRawFixture[0], arcadeName: `${chinaRawFixture[0].arcadeName} Updated` },
+  ...chinaRawFixture.slice(1),
+];
+const changedVerification = deferred();
+const changedBrowser = savedChinaBrowser({ official: () => changedVerification.promise });
+await settle();
+const initialSavedList = changedBrowser.elements["[data-list]"].innerHTML;
+changedVerification.resolve(officialResponse(changedRecords));
+await settle();
+assert.equal(changedBrowser.elements["[data-list]"].innerHTML, initialSavedList,
+  "verification must never replace the active store list or reset map navigation");
+
+const nextVisitVerification = deferred();
+const nextVisitBrowser = savedChinaBrowser({
+  official: () => nextVisitVerification.promise,
+  stored: changedBrowser.stored,
+});
+await settle();
+assert.ok(nextVisitBrowser.elements["[data-list]"].innerHTML.includes(changedRecords[0].arcadeName),
+  "a verified same-count change must be stored and available on the next visit");
+nextVisitVerification.reject(new Error("offline on next visit"));
+await settle();
+assert.ok(nextVisitBrowser.elements["[data-list]"].innerHTML.includes(changedRecords[0].arcadeName));
+
+const cachedOfflineBrowser = savedChinaBrowser({
+  official: async () => { throw new Error("official service offline"); },
+  stored: new Map(changedBrowser.stored), savedError: new Error("saved file request failed"),
+});
+await settle();
+assert.ok(cachedOfflineBrowser.elements["[data-list]"].innerHTML.includes(changedRecords[0].arcadeName),
+  "a validated browser snapshot must remain usable if the saved file request fails");
+
+const inactiveVerification = deferred();
+const inactiveBrowser = savedChinaBrowser({ official: () => inactiveVerification.promise });
+await settle();
+inactiveBrowser.currentButton.listeners.click();
+await settle();
+const currentListBeforeVerification = inactiveBrowser.elements["[data-list]"].innerHTML;
+const currentSourceBeforeVerification = inactiveBrowser.elements["[data-source]"].innerHTML;
+const currentStatusBeforeVerification = inactiveBrowser.elements["[data-status]"].textContent;
+inactiveVerification.resolve(officialResponse(changedRecords));
+await settle();
+assert.equal(inactiveBrowser.elements["[data-dataset-title]"].textContent,
+  "maimai Japan + United States");
+assert.equal(inactiveBrowser.elements["[data-list]"].innerHTML, currentListBeforeVerification);
+assert.equal(inactiveBrowser.elements["[data-source]"].innerHTML, currentSourceBeforeVerification);
+assert.equal(inactiveBrowser.elements["[data-status]"].textContent, currentStatusBeforeVerification,
+  "a remote check finishing after a dataset switch must not change the active map status");
+
+const blockedBrowser = savedChinaBrowser({
+  official: async () => officialResponse(changedRecords), blockedStorage: true,
+});
+await settle();
+assert.equal(blockedBrowser.root.attributes["aria-busy"], "false");
+assert.equal(blockedBrowser.elements["[data-list]"].innerHTML, initialSavedList,
+  "disabled browser storage must fall back to the bundled snapshot");
+
+const corruptStored = new Map([...changedBrowser.stored.keys()].map((key) => [key, "{bad-json"]));
+const corruptBrowser = savedChinaBrowser({
+  official: async () => { throw new Error("official service offline"); }, stored: corruptStored,
+});
+await settle();
+assert.equal(corruptBrowser.elements["[data-list]"].innerHTML, initialSavedList,
+  "corrupt browser cache must not prevent the bundled snapshot from rendering");
+
+const incompletePayload = structuredClone(chinaSavedFixture);
+incompletePayload.locations[0].cityKey = "missing-city-reference";
+const incompleteBrowser = savedChinaBrowser({
+  official: async () => { throw new Error("official service offline"); },
+  stored: new Map([["maimaiChinaSnapshot:v1", JSON.stringify({
+    cacheVersion: 1, payload: incompletePayload,
+  })]]),
+});
+await settle();
+assert.equal(incompleteBrowser.elements["[data-list]"].innerHTML, initialSavedList,
+  "a parseable but inconsistent cache must fall back to the bundled snapshot");
+
+const malformedBrowser = savedChinaBrowser({
+  official: async () => officialResponse([{ id: "bad-record", province: "河南" }]),
+});
+await settle();
+assert.equal(malformedBrowser.elements["[data-list]"].innerHTML, initialSavedList,
+  "an invalid official response must never overwrite usable saved stores");
+
 console.log(
   JSON.stringify(
     {
@@ -2136,7 +2390,7 @@ console.log(
       worldwideMapped: worldwidePayload.summary.mapped,
       worldwideOverviewMarkers: worldwidePayload.mapGroups.length,
       northAmericaMapped: mappedNorthAmerica,
-      chinaLiveFixtureLocations: chinaRawFixture.length,
+      chinaSavedFixtureLocations: chinaRawFixture.length,
       chinaBulkStoreMarkers: 0,
       chinaProvinceOverviewGroups: chinaSupportFixture.mapGroups.length,
       baiduScriptsLoaded: appendedScripts.length,

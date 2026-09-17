@@ -41,10 +41,11 @@
         type="button"
         aria-pressed="false"
         data-dataset="china"
-        data-data-url="https://sega-register.wahlap.net/api/sega/maidx/rest/location"
+        data-data-url="/data/maimai_locations_china.json"
+        data-verify-url="https://sega-register.wahlap.net/api/sega/maidx/rest/location"
         data-support-url="/data/maimai_china_region_hierarchy.json"
         data-source-url="https://wc.wahlap.net/maidx/location/index.html"
-        data-adapter="wahlap"
+        data-adapter="china-saved"
         data-provider="baidu"
         data-label="Mainland China"
       >Mainland China</button>
@@ -132,4 +133,5 @@
   <div class="maimai-map-source" data-source></div>
 </div>
 <script src="/vendor/googlemaps-markerclusterer/2.6.2/index.min.js" defer></script>
-<script src="/js/maimai-map.js?v=20260917-china-region-coverage" defer></script>
+<script src="/js/maimai-china-data.js?v=20260917-saved-locations" defer></script>
+<script src="/js/maimai-map.js?v=20260917-saved-locations" defer></script>

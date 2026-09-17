@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -137,7 +138,7 @@ def build(source: str, output: Path) -> dict[str, Any]:
 
     payload = {
         "schemaVersion": 1,
-        "generatedAt": "2026-07-28T00:00:00Z",
+        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "coordinateSystem": "BD-09",
         "coordinatePrecision": "administrative-center",
         "source": {

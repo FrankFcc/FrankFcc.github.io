@@ -184,11 +184,17 @@ class GeneratedDatasetTests(unittest.TestCase):
         payload = self.china_hierarchy
         groups = payload["mapGroups"]
         provinces = payload["regions"]
+        expected_province_keys = {
+            "北京", "天津", "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
+            "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南",
+            "湖北", "湖南", "广东", "广西", "海南", "重庆", "四川", "贵州",
+            "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆",
+        }
         self.assertEqual(payload["coordinateSystem"], "BD-09")
-        self.assertEqual(len(groups), 30)
-        self.assertEqual(len(provinces), 30)
-        self.assertEqual(len({group["id"] for group in groups}), 30)
-        self.assertEqual(len({group["key"] for group in groups}), 30)
+        self.assertEqual(len(groups), 31)
+        self.assertEqual(len(provinces), 31)
+        self.assertEqual(len({group["id"] for group in groups}), 31)
+        self.assertEqual({group["key"] for group in groups}, expected_province_keys)
         self.assertEqual(
             {group["key"] for group in groups},
             {province["key"] for province in provinces},
@@ -218,8 +224,20 @@ class GeneratedDatasetTests(unittest.TestCase):
                     self.assertGreaterEqual(district["lng"], -180, district["key"])
                     self.assertLessEqual(district["lng"], 180, district["key"])
 
-        self.assertEqual(city_count, 362)
-        self.assertEqual(district_count, 3100)
+        self.assertEqual(city_count, 369)
+        self.assertEqual(district_count, 3174)
+
+    def test_china_hierarchy_includes_lhasa_chengguan(self) -> None:
+        tibet = next(
+            province for province in self.china_hierarchy["regions"]
+            if province["key"] == "西藏"
+        )
+        self.assertEqual(tibet["name"], "西藏自治区")
+        self.assertEqual(len(tibet["cities"]), 7)
+        lhasa = next(city for city in tibet["cities"] if city["key"] == "拉萨市")
+        self.assertTrue(any(
+            district["key"] == "城关区" for district in lhasa["districts"]
+        ))
 
 
 if __name__ == "__main__":

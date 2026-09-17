@@ -1920,7 +1920,9 @@
           ? "subregion"
           : (level === "city" ? "cityKey" : "districtKey");
         const listOnlyCount = state.filtered.filter(
-          (location) => !location[assignmentField],
+          (location) => level === "province"
+            ? !hasCoordinates(chinaProvinceRegion(location.subregion))
+            : !location[assignmentField],
         ).length;
         const listOnlySuffix = listOnlyCount
           ? ` ${listOnlyCount.toLocaleString()} locations remain list-only at this level.`
@@ -2276,18 +2278,25 @@
         ...group,
         key: group.key,
         name: group.name,
+        aliases: [...new Set([
+          ...chinaRegionAliases(matched),
+          ...chinaRegionAliases(group),
+        ])],
         cities: matched?.cities || [],
       };
     });
     const provincesByKey = new Map(
-      chinaRegions.map((province) => [province.key, province]),
+      chinaRegions.flatMap((province) => (
+        chinaRegionAliases(province).map((alias) => [alias, province])
+      )),
     );
     const locations = rawLocations.map((item) => {
       if (!item || item.id == null || !item.province || !item.arcadeName || !item.address) {
         throw new Error("Wahlap location schema changed");
       }
-      const subregion = String(item.province);
-      const province = provincesByKey.get(subregion);
+      const sourceProvince = String(item.province).trim();
+      const province = provincesByKey.get(sourceProvince);
+      const subregion = province?.key || sourceProvince;
       const hierarchy = matchChinaAddressHierarchy(String(item.address), province);
       return {
         id: `cn-wahlap-${String(item.id)}`,
@@ -2313,12 +2322,12 @@
     });
     const provinces = new Set(locations.map((location) => location.subregion));
     const mapGroups = provinceGroups.filter((group) => provinces.has(group.key));
-    if (mapGroups.length !== provinces.size) {
-      throw new Error("China province-center coverage is incomplete");
-    }
-    if (rawRegions.length && chinaRegions.some((region) => region.cities.length === 0)) {
-      throw new Error("China province-city-district hierarchy coverage is incomplete");
-    }
+    // A new province in the live feed must not take all existing locations offline.
+    const missingProvinces = [...provinces].filter((key) => !provincesByKey.has(key));
+    const coverageNote = missingProvinces.length
+      ? `Province summaries are unavailable for ${missingProvinces.join(", ")}; `
+        + "their stores remain searchable in the list and can be opened individually on Baidu. "
+      : "";
     return {
       schemaVersion: 3,
       id: config.id,
@@ -2340,7 +2349,7 @@
         },
       ],
       notes: [
-        "Baidu shows one lightweight province, city, or district summary level at a time, then address-matches every store only inside the active district.",
+        coverageNote + "Baidu shows one lightweight province, city, or district summary level at a time, then address-matches every store only inside the active district.",
       ],
       summary: {
         total: locations.length,
